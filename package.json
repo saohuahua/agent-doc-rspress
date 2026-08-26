@@ -1,0 +1,19 @@
+{
+  "name": "agent-doc-rspress",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "rspress dev",
+    "build": "rspress build",
+    "preview": "rspress preview",
+    "check": "node scripts/check-links.mjs && node scripts/check-source-refs.mjs",
+    "check:links": "node scripts/check-links.mjs",
+    "check:refs": "node scripts/check-source-refs.mjs"
+  },
+  "dependencies": {
+    "@rspress/cli": "^0.0.0-next-20230810075445",
+    "mermaid": "^11.17.1",
+    "rspress": "^1.47.2",
+    "unist-util-visit": "^5.1.0"
+  }
+}
