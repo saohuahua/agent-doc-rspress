@@ -38,8 +38,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check documentation
-        run: pnpm check
+      - name: Check documentation links
+        run: pnpm check:links
 
       - name: Build site
         run: pnpm build
