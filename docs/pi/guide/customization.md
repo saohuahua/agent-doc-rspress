@@ -7,7 +7,7 @@ description: Extension / Skill / Prompt Template / Theme / Package / 自定义�
 
 Pi 的自定义手段有六种，很容易混。这一页只做一件事：**帮你在 30 秒内选对那一种**。
 
-机制细节不在这里展开——扩展机制留给 [Pi 源码深入](/pi/source/)，本页只讲定位和配置。
+机制细节不在这里展开——扩展机制留给 [Pi 原理](/pi/principle/)，本页只讲定位和配置。
 
 ## 1. 先做选择
 
@@ -406,7 +406,7 @@ Ollama 忽略 `apiKey`，但 Pi 仍然要求模型"有认证"才会出现在 `/m
 
 Ollama、vLLM、SGLang 这类 OpenAI 兼容服务经常需要这两个。`compat` 可以写在 provider 级（对全部模型生效）或 model 级（覆盖单个模型）。
 
-这套"把 provider 差异变成模型上的数据"的设计是 Pi 兼容层的核心，展开讨论见 [Pi 源码深入](/pi/source/)。
+这套"把 provider 差异变成模型上的数据"的设计是 Pi 兼容层的核心，展开讨论见 [Pi 原理](/pi/principle/)。
 
 :::
 

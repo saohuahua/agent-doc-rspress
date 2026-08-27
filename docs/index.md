@@ -20,8 +20,8 @@ features:
   - title: Pi 使用指南
     details: 基于 v0.84.3 的完整中文指南：安装登录、设置与快捷键、会话与压缩、SDK/RPC 接入、平台与隔离。
     icon: 📖
-  - title: Pi 源码深入
-    details: 从启动链路到核心循环的源码解读，理解 Harness、事件流、状态机等关键设计。
+  - title: Pi 原理
+    details: 按设计问题拆解：10 个包怎么分层、循环凭什么只有 796 行、上下文怎么组装、可靠性边界在哪。
     icon: 🔬
   - title: 实验室
     details: 基于 Pi 的二次开发路线与差异化实验，探索 Extension、Skill、Provider 等扩展机制。

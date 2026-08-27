@@ -3,6 +3,7 @@ import { defineConfig } from 'rspress/config';
 import { pluginMermaid } from './mermaid-plugin';
 
 export default defineConfig({
+  base: '/agent-doc-rspress/',
   plugins: [pluginMermaid()],
   markdown: {
     mdxRs: false,
@@ -10,14 +11,14 @@ export default defineConfig({
   root: path.join(__dirname, 'docs'),
   lang: 'zh',
   title: 'Agent 学习与实验',
-  description: '从 Agent 基础到 Pi Coding Agent 源码深入与二次开发',
+  description: '从 Agent 基础到 Pi Coding Agent 原理与二次开发',
   logoText: 'Agent Doc',
   themeConfig: {
     nav: [
       { text: '首页', link: '/', activeMatch: '^/$' },
       { text: 'Learn Agent', link: '/learn/', activeMatch: '/learn/' },
       { text: 'Pi 指南', link: '/pi/guide/', activeMatch: '/pi/guide/' },
-      { text: 'Pi 源码', link: '/pi/source/', activeMatch: '/pi/source/' },
+      { text: 'Pi 原理', link: '/pi/principle/', activeMatch: '/pi/principle/' },
       { text: '实验室', link: '/pi/lab/', activeMatch: '/pi/lab/' },
       { text: '使用记录', link: '/practice/', activeMatch: '/practice/' },
     ],
@@ -90,12 +91,13 @@ export default defineConfig({
           ],
         },
       ],
-      '/pi/source/': [
+      '/pi/principle/': [
         {
-          text: '源码深入',
+          text: 'Pi 原理',
           items: [
-            { text: '阅读路线', link: '/pi/source/' },
-            { text: '05 扩展体系与能力边界', link: '/pi/source/05-extension-system' },
+            { text: '总览与阅读路线', link: '/pi/principle/' },
+            { text: '01 总体架构与设计哲学', link: '/pi/principle/01-architecture' },
+            { text: '09 扩展体系与能力边界', link: '/pi/principle/09-extension-system' },
           ],
         },
       ],

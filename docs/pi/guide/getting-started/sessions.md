@@ -175,7 +175,7 @@ flowchart TD
 
 会话文件是 **append-only 的树**，模型切换、压缩、分支摘要都是**显式条目**而不是隐式状态。这意味着"这次跑为什么慢/为什么贵"是可以事后从文件里查出来的。
 
-具体格式见 [会话文件格式](../reference/session-format)；双流（Entry / Record）的设计讨论属于 [Pi 源码深入](/pi/source/) 的范围。
+具体格式见 [会话文件格式](../reference/session-format)；双流（Entry / Record）的设计讨论属于 [Pi 原理](/pi/principle/) 的范围。
 
 :::
 

@@ -7,7 +7,7 @@ description: Pi Coding Agent 的安装、配置与日常使用
 
 这一板块讲**怎么用 Pi**：装上、登录、跑起来、配置成自己顺手的样子。
 
-它不讲 Pi 的源码实现——那是 [Pi 源码深入](/pi/source/) 的事；也不讲 Agent 的原理——那是 [Learn Agent](/learn/) 的事。
+它不讲 Pi 的源码实现——那是 [Pi 原理](/pi/principle/) 的事；也不讲 Agent 的原理——那是 [Learn Agent](/learn/) 的事。
 
 :::info 版本基准
 

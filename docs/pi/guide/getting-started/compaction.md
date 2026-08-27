@@ -362,7 +362,7 @@ pi.on("session_before_tree", async (event, ctx) => {
 
 `packages/agent/src/harness/compaction/` 下也有 `compaction.ts` / `branch-summarization.ts` / `utils.ts`，那是新一代运行时（`packages/agent/src/harness/agent-harness.ts`）的路径。**当前跑生产的是 `coding-agent` 下的这一份。**
 
-两代运行时的对照留到 [Pi 源码深入](/pi/source/) 讲。
+两代运行时的对照留到 [Pi 原理](/pi/principle/) 讲。
 
 :::
 
