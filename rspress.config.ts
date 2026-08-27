@@ -97,6 +97,8 @@ export default defineConfig({
           items: [
             { text: '总览与阅读路线', link: '/pi/principle/' },
             { text: '01 总体架构与设计哲学', link: '/pi/principle/01-architecture' },
+            { text: '02 一条消息的旅程', link: '/pi/principle/02-message-journey' },
+            { text: '03 Agent Loop 与终止控制', link: '/pi/principle/03-agent-loop' },
             { text: '09 扩展体系与能力边界', link: '/pi/principle/09-extension-system' },
           ],
         },

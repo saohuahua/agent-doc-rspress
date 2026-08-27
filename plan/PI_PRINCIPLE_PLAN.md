@@ -346,8 +346,8 @@ node scripts/session-stats.mjs --latest --cwd "D:/project/agent-doc-rspress"   #
 |---|---|---|
 | index | ✅ | |
 | 01 架构 | ✅ | |
-| 02 消息旅程 | ⏳ | |
-| 03 Agent Loop | ⏳ | |
+| 02 消息旅程 | ✅ | `02-message-journey.md`，四层链路 / 十四道闸 |
+| 03 Agent Loop | ✅ | `03-agent-loop.md`，三层循环 / 六个出口 / 无 maxTurns |
 | 04 工具系统 | ⏳ | |
 | 05 Context Engineering | ⏳ | |
 | 06 会话与压缩 | ⏳ | |
