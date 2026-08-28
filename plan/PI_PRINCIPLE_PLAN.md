@@ -346,8 +346,8 @@ node scripts/session-stats.mjs --latest --cwd "D:/project/agent-doc-rspress"   #
 |---|---|---|
 | index | ✅ | |
 | 01 架构 | ✅ | |
-| 02 消息旅程 | ✅ | `02-message-journey.md`，四层链路 / 十四道闸 |
-| 03 Agent Loop | ✅ | `03-agent-loop.md`，三层循环 / 六个出口 / 无 maxTurns |
+| 02 消息旅程 | ✅ | 目录 `02-message-journey/`：`index`（总览）+ `gates`（十四道闸）+ `assembly`（三次转换） |
+| 03 Agent Loop | ✅ | 目录 `03-agent-loop/`：`index`（总览）+ `loop`（怎么转）+ `termination`（怎么停） |
 | 04 工具系统 | ⏳ | |
 | 05 Context Engineering | ⏳ | |
 | 06 会话与压缩 | ⏳ | |
@@ -357,6 +357,22 @@ node scripts/session-stats.mjs --latest --cwd "D:/project/agent-doc-rspress"   #
 | 10 安全可观测（概览） | ⏳ | |
 
 写完一章：更新本表 → 更新 `docs/pi/principle/index.md` 的状态表 → 更新 `rspress.config.ts` 侧边栏 → 跑 `pnpm check` → 构建。
+
+### 7.1 长章拆页约定（从 02 / 03 开始适用）
+
+单页超过约 350 行就拆成目录：
+
+```
+docs/pi/principle/0X-name/
+  index.md    总览：面试题 · 具体问题 · 全景图 · 速查表 · 边界 · 未验证 · 小结
+  <a>.md      详解页：代码 · 逐条证据 · 取舍 · 本页源码索引
+  <b>.md
+```
+
+- 总览页**不放代码块以外的长证据**，只放结论和路标
+- 每个详解页开头一行 `[← 回到 0X 总览](./)`，结尾一行“下一步”
+- 源码索引按页拆，不在总览页汇总
+- 侧边栏用嵌套 `items`，父项带 `link` 指向目录 index
 
 ---
 

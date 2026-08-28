@@ -97,8 +97,24 @@ export default defineConfig({
           items: [
             { text: '总览与阅读路线', link: '/pi/principle/' },
             { text: '01 总体架构与设计哲学', link: '/pi/principle/01-architecture' },
-            { text: '02 一条消息的旅程', link: '/pi/principle/02-message-journey' },
-            { text: '03 Agent Loop 与终止控制', link: '/pi/principle/03-agent-loop' },
+            {
+              text: '02 一条消息的旅程',
+              link: '/pi/principle/02-message-journey/',
+              collapsed: false,
+              items: [
+                { text: '02.1 十四道闸', link: '/pi/principle/02-message-journey/gates' },
+                { text: '02.2 从上下文到请求体', link: '/pi/principle/02-message-journey/assembly' },
+              ],
+            },
+            {
+              text: '03 Agent Loop 与终止控制',
+              link: '/pi/principle/03-agent-loop/',
+              collapsed: false,
+              items: [
+                { text: '03.1 循环怎么转', link: '/pi/principle/03-agent-loop/loop' },
+                { text: '03.2 怎么停下来', link: '/pi/principle/03-agent-loop/termination' },
+              ],
+            },
             { text: '09 扩展体系与能力边界', link: '/pi/principle/09-extension-system' },
           ],
         },

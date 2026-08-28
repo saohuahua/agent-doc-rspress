@@ -1,0 +1,71 @@
+:root {
+  /* Prefer CJK monospace fonts so text diagrams share one character grid. */
+  --diagram-mono-font: "Sarasa Mono SC", "Noto Sans Mono CJK SC",
+    "Source Han Mono SC", "LXGW WenKai Mono", "Microsoft YaHei Mono",
+    ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+.rspress-doc pre,
+.rspress-doc pre code,
+.rspress-doc [class^="language-"] pre,
+.rspress-doc [class^="language-"] code {
+  font-family: var(--diagram-mono-font);
+  font-variant-ligatures: none;
+  font-synthesis: none;
+  letter-spacing: 0;
+}
+
+/* Present Markdown tables as a single, scannable data surface. */
+.rspress-doc table {
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--rp-c-divider-light);
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 12px;
+  background: var(--rp-c-bg);
+}
+
+.rspress-doc table thead {
+  background: var(--rp-c-bg-soft);
+}
+
+.rspress-doc table tr,
+.rspress-doc table tr:nth-child(even) {
+  border: 0;
+  background: transparent;
+}
+
+.rspress-doc table th,
+.rspress-doc table td {
+  border: 0;
+  border-bottom: 1px solid var(--rp-c-divider-light);
+  padding: 12px 16px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.rspress-doc table th {
+  background: var(--rp-c-bg-soft);
+  font-weight: 600;
+}
+
+.rspress-doc table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.rspress-doc table tbody tr {
+  transition: background-color 150ms ease;
+}
+
+.rspress-doc table tbody tr:hover {
+  background: var(--rp-c-bg-soft);
+}
+
+@media (max-width: 640px) {
+  .rspress-doc table th,
+  .rspress-doc table td {
+    min-width: 9rem;
+    padding: 10px 12px;
+  }
+}
