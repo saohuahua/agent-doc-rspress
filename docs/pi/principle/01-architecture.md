@@ -323,7 +323,7 @@ RPC 模式里还额外有一个 `agent_settled`——`agent_end` 之后可能还
 
 ### 事件驱动而非回调嵌套
 
-换来的是订阅者随便加而接口不膨胀。代价是事件顺序变成了隐式契约——并行工具模式下 `tool_result` 和 `tool_execution_end` 会交错，这件事只写在文档里，类型系统管不住（第 04 章）。
+换来的是订阅者随便加而接口不膨胀。代价是事件顺序变成了隐式契约——并行工具模式下 `tool_result` 和 `tool_execution_end` 会交错，这件事只写在文档里，类型系统管不住（[第 04 章](./04-tool-system/)）。
 
 ### 扩展优于修改
 
@@ -376,8 +376,7 @@ Provider 之间的差异不写成 `if (provider === "openai")`，而是收敛成
 - 通用 Harness 的难点全写在 `AgentLoopConfig` 的十一个回调上
 - 12 万行不在循环里，在"喂给循环的东西怎么来"
 
-<details>
-<summary>本章源码索引</summary>
+:::details 本章源码索引
 
 | 符号 | 位置 |
 |---|---|
@@ -391,8 +390,8 @@ Provider 之间的差异不写成 `if (provider === "openai")`，而是收敛成
 | `HarnessNotImplemented` 抛出点 | `packages/agent/src/harness/agent-harness.ts:233` |
 | Design Principles | `packages/coding-agent/docs/usage.md:304`，六项清单在 `usage.md:308` |
 
-</details>
+:::
 
 ## 下一步
 
-→ [02 一条消息的旅程](./02-message-journey/) — 按下回车之后、真正发给模型之前，这条链路上一共有十四道闸。哪一道出问题会导致"它没按我说的做"。
+→ [02 输入如何进入 Agent](./02-message-journey/) — 最小的 `prompt(text)` 只有三行，产品里它被四类现实撞出了缺口。Pi 用四个阶段补这些缺口。

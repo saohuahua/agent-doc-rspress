@@ -1,26 +1,54 @@
 ---
-title: 02.1 十四道闸
-description: TUI 的六条岔路与 AgentSession 的八道闸，逐道拆解拦的是什么、代价是什么
+title: 02.1 输入管线
+description: 输入分类、文本变换、运行状态、运行前保护——最小骨架每一步在 Pi 里的真实形态
 ---
 
-# 02.1 十四道闸
+# 02.1 输入管线：从骨架到四阶段处理
 
 [← 回到 02 总览](./)｜以 **Pi v0.84.3 (+20, `8fa7eebd`)** 源码为基准，代码块里的中文注释为本文补充。
 
-总览里的十四道闸速查表给了结论，这一页给证据：每道闸的代码在哪、判断什么、换来什么、代价是什么。
+总览里的骨架是这样的：
 
-## 一、TUI 层：六条岔路
+```typescript title="教学示例，非 Pi 源码"
+async function prompt(text: string) {
+  if (isCommand(text)) return executeCommand(text);      // ← §一
+  const expanded = expandPrompt(text);                   // ← §二
+  if (agent.isRunning) return agent.steer(expanded);     // ← §三
+  assertModelAndAuth();                                  // ← §四
+  await compactIfNeeded();                               // ← §四
+  await agent.prompt(createUserMessage(expanded));
+}
+```
 
-**文件**：`packages/coding-agent/src/modes/interactive/interactive-mode.ts:2962`
+这一页按这四步展开。每一节的结构固定：**最小实现怎么写 → 会遇到什么问题 → Pi 怎么处理 → 取舍与失败表现 → 怎么排查**。
 
-交互模式的输入回调是一条长长的 if 链，一路匹配下来：
+## 一、输入分类：`isCommand(text)` 那一行
+
+### 最小实现怎么写
+
+一个 `if`：以 `/` 开头就查命令表，否则当普通消息。
+
+### 会遇到什么问题
+
+命令有两种主人，它们想要的东西完全不同：
+
+- `/settings`、`/model`、`/tree` 这类要**打开一个界面**，不产生任何消息，也不需要模型参与
+- 扩展注册的 `/deploy` 这类要**自己跑一段逻辑**，可能自己去调模型
+
+第一种如果交给 `AgentSession` 处理，产品层就得知道"选择器长什么样"；第二种如果交给 TUI 处理，扩展就得依赖某个具体界面。
+
+### Pi 怎么处理
+
+拆到两层，各管一种。
+
+**TUI 层**在 `onSubmit` 的 if 链里就地解决内置命令：
 
 ```typescript title="packages/coding-agent/src/modes/interactive/interactive-mode.ts:2962" {5,8}
 this.defaultEditor.onSubmit = async (text: string) => {
   text = text.trim();
-  if (!text) return;                          // ① 空串直接丢
+  if (!text) return;                          // 空串直接丢
 
-  if (text === "/settings") {                 // ② 26 条内置命令逐条精确匹配
+  if (text === "/settings") {                 // 内置命令逐条精确匹配
     this.showSettingsSelector();              // 打开 UI，不产生任何消息
     this.editor.setText("");
     return;                                   // 到这里就结束，session 一无所知
@@ -28,71 +56,9 @@ this.defaultEditor.onSubmit = async (text: string) => {
   // ... /model /tree /export /fork /compact /resume /quit ...
 ```
 
-内置命令一共 **23 条**声明在 `BUILTIN_SLASH_COMMANDS`（`packages/coding-agent/src/core/slash-commands.ts:19`），另有 `/debug`、`/arminsayshi`、`/dementedelves` 三条只在 `onSubmit` 里处理、不出现在补全列表中，实际处理 26 条。
+命令的**名字和描述**声明在 `BUILTIN_SLASH_COMMANDS`（`packages/coding-agent/src/core/slash-commands.ts:19`）供补全 UI 使用，**行为**写在 TUI 的 if 链里。同一层还处理另外两条岔路：`!ls -la` 直接跑 shell（结果记成 `bashExecution` 消息，`!!` 前缀的还会标 `excludeFromContext` 只给人看），以及压缩期间把输入暂存进 TUI 自己的队列。
 
-这个数组只提供**名字、描述、参数提示**三样东西，供补全 UI 使用。真正的行为写在 TUI 的 if 链里。
-
-### 换来什么 / 代价是什么
-
-声明和实现分家，好处是 `core` 不需要知道 `/model` 会打开一个选择器——命令的 UI 行为完全属于界面层。
-
-代价是加一条内置命令要动两个文件，忘一个就出现"能补全但按了没反应"，或者"能用但补不出来"。
-
-### 命令之外的三条岔路
-
-- **③ shell 直通**：`!ls -la` 直接执行 shell，结果作为 `bashExecution` 消息记进会话；`!!` 前缀的结果标记 `excludeFromContext`，只给人看不给模型看
-- **④ 压缩排队**：压缩正在跑，普通输入进 `compactionQueuedMessages` 本地队列，等压缩结束再 flush
-- **⑤ 流式分流**：agent 正在跑，直接走 `session.prompt(text, { streamingBehavior: "steer" })`
-
-只有全都不匹配（⑥），文本才通过 `getUserInput()`（`packages/coding-agent/src/modes/interactive/interactive-mode.ts:3878`）交给主循环：
-
-```typescript title="packages/coding-agent/src/modes/interactive/interactive-mode.ts:1176" {3,5}
-// Main interactive loop
-while (true) {
-  const userInput = await this.getUserInput();   // 阻塞等一条真正的用户消息
-  try {
-    await this.session.prompt(userInput);        // 这里才进入产品层
-  } catch (error: unknown) {
-    this.showError(error instanceof Error ? error.message : "Unknown error occurred");
-  }
-}
-```
-
-这个 `while(true)` 是整个交互模式的主循环，但它不是 Agent Loop。它只负责"取一条输入、喂进去、把错误打到屏幕上"。真正的循环在两层之下（[第 03 章](../03-agent-loop/)）。
-
-## 二、产品层：八道闸的形状
-
-**文件**：`packages/coding-agent/src/core/agent-session.ts:1139`
-
-先看形状，再看细节。八道闸在 `prompt()` 里是顺序执行的，其中五道会**提前返回或抛错**：
-
-```mermaid
-flowchart TD
-  A["prompt(text)"] --> B{"⑦ 是扩展注册的命令？"}
-  B -->|"是"| X1["立即执行，return<br/>不产生任何消息"]
-  B -->|"否"| C{"⑧ 压缩正在跑？"}
-  C -->|"是"| X2["throw"]
-  C -->|"否"| D["⑨ 扩展 input 事件<br/>⑩ 展开 skill 与模板"]
-  D --> E{"⑪ agent 正在跑？"}
-  E -->|"是"| X3["steer / followUp 排队，return"]
-  E -->|"否"| F{"⑫ 有模型也有凭据？"}
-  F -->|"否"| X2
-  F -->|"是"| G["⑬ 压缩检查<br/>⑭ 组装消息 + before_agent_start<br/>↓ 进 Agent Loop"]
-```
-
-为了不把图画糊，上面省略了一条分支：闸 ⑨ 的扩展如果返回 `handled`，同样会当场 `return`。
-
-五个提前出口的语义各不相同：
-
-| 出口 | 用户看到什么 | 会话里留下什么 |
-|---|---|---|
-| ⑦ 扩展命令 | 扩展自己画的 UI 或消息 | 由扩展决定 |
-| ⑧ 压缩互斥 | 一条报错 | 什么都没有 |
-| ⑨ 扩展 `handled` | 由扩展决定 | 由扩展决定 |
-| ⑪ 流式排队 | 待发消息列表多一条 | 等真正出队时才写入 |
-| ⑫ 认证失败 | 一条报错 | 什么都没有 |
-
-## 三、闸 ⑦ 扩展命令：唯一能在流式中插队执行的东西
+**产品层**在 `prompt()` 的第一步查扩展注册表：
 
 ```typescript title="packages/coding-agent/src/core/agent-session.ts:1147" {2,5}
 if (expandPromptTemplates && text.startsWith("/")) {
@@ -104,32 +70,47 @@ if (expandPromptTemplates && text.startsWith("/")) {
 }
 ```
 
-放在最前面是有意的：扩展命令自己管自己的 LLM 交互（通过 `pi.sendMessage()`），所以**即使 agent 正在流式输出，它也照样立即执行**。相比之下 steer/followUp 只能排队。
+放在第一步的原因是：扩展命令通过 `pi.sendMessage()` 自己管理与模型的交互，所以**即使 agent 正在流式输出，它也照样立即执行**，而不像普通消息那样只能排队。
 
-代价是命名冲突没有仲裁。把 TUI 内置命令算上，`/` 前缀一共有四类主人，匹配顺序写死为：
+### 取舍与失败表现
+
+声明与行为分家，让 `core` 不必知道 `/model` 会打开一个选择器。代价是加一条内置命令要动两个文件，漏改一处就出现"能补全但按了没反应"，或者"能用但补不出来"。
+
+### 排查：`/review` 为什么走的不是我的模板
+
+`/` 前缀一共有四类主人，匹配顺序是固定的：
 
 ```text
-内置命令  →  扩展命令  →  skill  →  prompt 模板
- (TUI)      (闸 ⑦)      (闸 ⑩)      (闸 ⑩)
+内置命令        扩展命令              skill              prompt 模板
+(TUI if 链)  →  (AgentSession 第一步)  →  (展开阶段)  →  (展开阶段)
+   ↑ 先到先得，前面命中就不会往后传，且不产生任何告警
 ```
 
-一个扩展注册了 `/review`，你的 `prompts/review.md` 就永远不会被触发，而且没有任何警告。
+定位办法：
 
-## 四、闸 ⑧ 压缩互斥：唯一一处直接 throw 的并发保护
+1. 名字撞上 `BUILTIN_SLASH_COMMANDS` 里的 23 条之一 → 改名，这层没得商量
+2. 没撞内置命令但仍不生效 → 用 `/reload` 后看有没有同名扩展命令；扩展命令的注册发生在 `_tryExecuteExtensionCommand` 查的那张表里
+3. 都不是 → 检查模板文件是否在 `~/.pi/agent/prompts/` 或 `<项目>/.pi/prompts/` 下，且扩展名为 `.md`
 
-```typescript title="packages/coding-agent/src/core/agent-session.ts:1156" {2-4}
-if (this._compactionAbortController !== undefined) {
-  throw new Error(
-    "Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry.",
-  );
-}
-```
+## 二、文本变换：`expandPrompt(text)` 那一行
 
-压缩会重写 `agent.state.messages`。如果这时候插进一条新消息，压缩产出的摘要就会盖掉它。
+### 最小实现怎么写
 
-产品层的做法是直接拒绝，让 TUI 自己去排队（闸 ④）——**冲突不在这里解决，只在这里检测**。这是一种常见的分层策略：底层只负责让错误变得可见，恢复策略留给更懂用户意图的那一层。
+查一张模板表，命中就把文件内容读出来替换掉。
 
-## 五、闸 ⑨ 扩展 `input` 事件：改用户原话的地方
+### 会遇到什么问题
+
+三件事想插在同一个位置，但它们要看到的输入不一样：
+
+- 扩展想做**输入审计**——它要看用户敲的原文
+- skill 展开要产出**几千字的完整文档**
+- 模板展开要做**位置参数替换**
+
+如果顺序摆错，扩展审计到的就是模板作者写的字，而不是用户写的字。
+
+### Pi 怎么处理
+
+固定成"先扩展、后展开"：
 
 ```typescript title="packages/coding-agent/src/core/agent-session.ts:1163" {4,9-10}
 let currentText = text;
@@ -145,17 +126,9 @@ if (this._extensionRunner.hasHandlers("input")) {
 }
 ```
 
-`emitInput`（`packages/coding-agent/src/core/extensions/runner.ts:1196`）把所有扩展的 `input` 处理器串成一条流水线：上一个的 `transform` 结果是下一个的输入，任何一个返回 `handled` 就立刻短路。
+`emitInput`（`packages/coding-agent/src/core/extensions/runner.ts:1196`）把所有扩展的 `input` 处理器串成一条流水线：上一个的 `transform` 结果是下一个的输入，任何一个返回 `handled` 就短路。
 
-三种返回值的语义：
-
-- `continue` —— 不管，交给下一个处理器
-- `transform` —— 改写文本或图片，继续往下走
-- `handled` —— 我处理完了，整条链路到此为止
-
-注意它在 skill/模板展开**之前**。这个顺序意味着扩展看到的是用户敲的原文 `/review src/api.ts`，而不是展开后的几千字。想做"输入审计"或"敏感词拦截"，这是唯一正确的位置——展开之后再拦，拦的是模板作者写的字，不是用户写的字。
-
-## 六、闸 ⑩ Skill 与模板展开：两套语法，同一个出口
+展开排在它后面，两条路并列：
 
 ```typescript title="packages/coding-agent/src/core/agent-session.ts:1183" {3-4}
 let expandedText = currentText;
@@ -165,14 +138,12 @@ if (expandPromptTemplates) {
 }
 ```
 
-两者的产物形态完全不同：
-
 | | 触发语法 | 产物 | 不匹配时 |
 |---|---|---|---|
 | Skill | `/skill:name args` | `<skill>` 标签包住的整份 SKILL.md | 原样返回 |
 | Prompt 模板 | `/name arg1 arg2` | 模板正文，`$1` `$2` `$@` 被替换 | 原样返回 |
 
-`_expandSkillCommand`（`packages/coding-agent/src/core/agent-session.ts:1333`）读整份 SKILL.md，剥掉 frontmatter，包进一个带 `location` 和 `baseDir` 的标签：
+skill 展开时多包了一行元信息：
 
 ```typescript title="packages/coding-agent/src/core/agent-session.ts:1344" {3-4}
 const content = readFileSync(skill.filePath, "utf-8");
@@ -182,17 +153,30 @@ References are relative to ${skill.baseDir}.\n\n${body}\n</skill>`;   // 告诉�
 return args ? `${skillBlock}\n\n${args}` : skillBlock;
 ```
 
-那句 `References are relative to ...` 是渐进披露能跑通的关键：SKILL.md 里写 `scripts/run.py`，模型才知道该去哪个目录找（第 05 章展开）。
+`References are relative to ...` 这句是渐进披露能跑通的前提：SKILL.md 里写 `scripts/run.py`，模型才知道去哪个目录找（第 05 章展开）。
 
-`expandPromptTemplate`（`packages/coding-agent/src/core/prompt-templates.ts:269`）走的是位置参数替换，产物是模板文件的正文。
+### 取舍与失败表现
 
-:::warning 两条路都静默失败
+顺序固定带来的好处是审计位置明确。代价是两条展开路都**静默失败**：skill 名或模板名不存在都原样返回，你敲错一个字母，模型收到的是 `/reveiw src/api.ts`，然后开始猜你想干什么。读文件失败会通过扩展 runner 发一个 error 事件，"名字不存在"则连事件都没有。
 
-skill 名不存在就原样返回，模板名不存在也原样返回。你敲错一个字母，得到的是模型收到一条 `/reveiw src/api.ts`，然后开始猜你想干什么。
+## 三、运行状态：`agent.isRunning` 那一行
 
-:::
+### 最小实现怎么写
 
-## 七、闸 ⑪ 流式分流：steer 与 followUp 的分岔口
+正在跑就拒绝，让用户等。
+
+### 会遇到什么问题
+
+用户在等待期间敲字有两种意图，直接拒绝会把它们一起丢掉：
+
+- "不对，别改那个文件" —— 希望**尽快**插进去纠正方向
+- "改完顺便把文档也更新一下" —— 希望**等它忙完**再处理
+
+另外还有一种并发：压缩正在重写 `agent.state.messages`，这时候插消息会被摘要覆盖。
+
+### Pi 怎么处理
+
+两个队列分开：
 
 ```typescript title="packages/coding-agent/src/core/agent-session.ts:1190" {2-6,8,10}
 if (this.isStreaming) {
@@ -211,17 +195,43 @@ if (this.isStreaming) {
 }
 ```
 
-关键在于**排队的是展开后的文本**。`/skill:review` 排进队列时已经变成了完整的 skill 块，等真正出队时不会再展开一次。
+两个队列各自什么时候被读，是[第 03 章](../03-agent-loop/loop)的内容。这里只需要注意一点：**排进队列的是展开后的文本**。`/skill:review` 入队时已经是完整的 skill 块，出队时不会再展开一次——排的是快照不是引用，避免了"排队期间 SKILL.md 被改了"的时序问题；代价是队列里可能躺着几千字，界面显示待发消息时要自己截断。
 
-### 换来什么 / 代价是什么
+压缩并发走另一条路，直接拒绝：
 
-避免了"排队期间 SKILL.md 被改了"导致的时序问题——排的是快照，不是引用。
+```typescript title="packages/coding-agent/src/core/agent-session.ts:1156" {2-4}
+if (this._compactionAbortController !== undefined) {
+  throw new Error(
+    "Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry.",
+  );
+}
+```
 
-代价是队列里躺的可能是几千字，TUI 显示待发消息时得自己截断。
+### 排查：压缩期间调 `prompt()` 报错，为什么不在这里排队
 
-`isStreaming` 的定义值得留意（`packages/coding-agent/src/core/agent-session.ts:900`）：它返回的是 `_isAgentRunActive`，这个标志在 `_runAgentPrompt` 入口置真、在 `_emitAgentSettled` 里置假。也就是说它覆盖了自动重试和压缩后重跑的整个区间，而不只是"正在吐字"的那一段（[第 03 章](../03-agent-loop/)）。
+`AgentSession` 只负责让冲突可见，不负责决定怎么恢复——因为"该排队还是该提示用户"取决于调用方是谁。TUI 知道自己面对的是人，所以它在更外层把输入存进 `compactionQueuedMessages`，压缩结束再 flush；而 SDK 调用方可能更希望立刻拿到错误自己处理。
 
-## 八、闸 ⑫ 模型与认证：两次 fail fast
+如果你在自己的集成里遇到这个错误，正确做法是在调用 `prompt()` 之前检查 `isCompacting`，或者捕获这条错误后自己排队，而不是去掉这个检查。
+
+另外注意 `isStreaming` 的口径（`packages/coding-agent/src/core/agent-session.ts:900`）：它返回的是 `_isAgentRunActive`，在 `_runAgentPrompt` 入口置真、在 `_emitAgentSettled` 里置假，覆盖了自动重试和压缩后重跑的整个区间，不只是"正在吐字"那一段。
+
+## 四、运行前保护：校验、压缩与最后的加料
+
+### 最小实现怎么写
+
+```typescript
+assertModelAndAuth();
+await compactIfNeeded();
+messages.push(createUserMessage(expanded));
+```
+
+### 会遇到什么问题
+
+三个：**没凭据的两种原因需要不同的修复动作**；**压缩要在哪一刻判断**；**扩展想在最后一刻加上下文**。
+
+### Pi 怎么处理
+
+校验两步，且都在消息进数组之前：
 
 ```typescript title="packages/coding-agent/src/core/agent-session.ts:1210" {1,5-7}
 if (!this.model) throw new Error(formatNoModelSelectedMessage());
@@ -235,11 +245,9 @@ if (!hasConfiguredAuth) {
 }
 ```
 
-两种"没凭据"给的是不同的提示：OAuth 过期要重新 `/login`，API Key 缺失要去配环境变量。同一个 `undefined`，两条排查路径。
+同一个 `undefined`，OAuth 过期给的是"跑 `/login` 重新授权"，API Key 缺失给的是"去哪配 key"——两条排查路径。这也是链路上第一次可能打网络的地方，`checkAuth` 可能触发 token 刷新。
 
-这里也是链路上第一次可能**打网络**的地方（`checkAuth` 可能触发 token 刷新）。它发生在消息组装之前，所以失败时会话里不会留下半条消息。
-
-## 九、闸 ⑬ 压缩检查：为什么要看"上一条"
+压缩判断紧随其后，依据是**上一条 assistant 消息带回来的 usage**：
 
 ```typescript title="packages/coding-agent/src/core/agent-session.ts:1231" {3}
 const lastAssistant = this._findLastAssistantMessage();
@@ -248,13 +256,9 @@ if (lastAssistant) {
 }
 ```
 
-判断上下文满没满，靠的是**上一条 assistant 消息带回来的 usage**，不是本地估算。这是链路上一个有点反直觉的设计：要发的是新消息，检查的却是旧回复。
+"要发的是新消息，检查的却是旧回复"看起来反直觉，但循环层拿到的 `messages` 就是要发出去的全部内容（第 01 章），它没有"发之前问一下还剩多少额度"的能力，唯一可靠的 token 数来自 provider 上一次的回执。第二个参数传 `false`，是为了让"用户中止了一个已经溢出的回复、然后又发了新消息"这种情况也能被检查到。压缩的完整机制在第 06 章。
 
-原因在第 01 章说过——循环层拿到的 `messages` 就是要发出去的全部内容，它没有"发之前先问一下还剩多少额度"的能力。唯一可靠的 token 数来自 provider 上一次的回执。
-
-第二个参数 `skipAbortedCheck = false` 是这条路径独有的。正常的 turn 结束后检查会跳过被用户 Esc 掉的消息，但"用户中止了一个已经溢出的回复，然后又发了新消息"这种情况必须处理，否则新消息一样会溢出。压缩的完整机制在第 06 章。
-
-## 十、闸 ⑭ 组装消息与 `before_agent_start`
+最后组装消息，并留一个扩展挂点：
 
 ```typescript title="packages/coding-agent/src/core/agent-session.ts:1237" {4,6,9}
 messages = [];
@@ -270,10 +274,15 @@ const result = await this._extensionRunner.emitBeforeAgentStart(
 );
 ```
 
-`emitBeforeAgentStart`（`packages/coding-agent/src/core/extensions/runner.ts:1081`）能干两件 `input` 干不了的事：
+`emitBeforeAgentStart`（`packages/coding-agent/src/core/extensions/runner.ts:1081`）能做两件 `input` 做不到的事：追加 `role: "custom"` 的上下文消息，以及整体替换 system prompt。它排在最后，是因为它需要看到最终文本才能决定加什么，同时又必须在进循环之前完成。
 
-- 追加 `role: "custom"` 的上下文消息，跟着用户消息一起进本轮
-- **整体替换 system prompt**，只对这一轮生效
+### 排查：认证失败为什么不应该先写 user message
+
+顺序是刻意的——校验 `throw` 的时候，一条消息都还没进 `messages` 数组。
+
+如果反过来先写消息再校验，失败的会话里会留下一条孤立的 user 消息。下次 `resume` 这个会话时，最后一条是 user 角色，`agent.continue()` 会把它当成待回复的提问重新发一遍，用户看到的是"我明明没说话，它自己动起来了"。
+
+同一套逻辑也解释了另一处细节：
 
 ```typescript title="packages/coding-agent/src/core/agent-session.ts:1278" {2-3,6-7}
 if (result?.systemPrompt !== undefined) {
@@ -285,22 +294,42 @@ if (result?.systemPrompt !== undefined) {
 }
 ```
 
-`else` 分支不是多余的。没有它，上一轮扩展改过的 system prompt 会一直粘着——注释里写得很直白："in case previous turn had modifications"。这类"每轮显式重置"的写法在 `AgentSession` 里出现了好几处，是长生命周期对象常见的坑。
+`else` 分支不能省。`AgentSession` 是长生命周期对象，没有这个显式重置，上一轮扩展改过的 system prompt 会一直粘着——源码注释写的是 "in case previous turn had modifications"。
 
-八道闸走完，`_runAgentPrompt(messages)` 接手，产品层的活到此为止。
+## 五、小结
 
-## 十一、小结
+- 阶段 1 拆到两层：需要界面的命令留在 TUI，需要自跑逻辑的命令留在产品层
+- 阶段 2 的顺序是"先扩展、后展开"，扩展因此能审计到用户原文；两条展开路都静默失败
+- 阶段 3 把"正在跑"拆成两个队列，把"正在压缩"做成显式拒绝，恢复策略交给更外层
+- 阶段 4 的三处校验都排在消息落库之前，为的是失败后会话里不留孤立消息
+- 长生命周期对象的每轮状态需要显式重置，否则上一轮的覆盖值会粘住
 
-- TUI 的六条岔路里有五条会就地结束，只有第六条才进产品层
-- 内置命令的声明在 `core`、行为在 TUI，分家的代价是加命令要动两个文件
-- 产品层八道闸里有四道会提前返回或抛错，语义各不相同（见 §二 的表）
-- 只有闸 ⑨ 和 ⑩ 在改文本；⑨ 看到的是原文，⑩ 之后才是展开后的几千字
-- `/` 前缀四类主人，先到先得且无警告
-- 排队排的是展开后的快照，不是原始命令
-- 压缩检查看的是上一条 assistant 的 usage，因为循环层没有"发之前问额度"的能力
+:::details 附录：源码里的十四项完整清单
 
-<details>
-<summary>本页源码索引</summary>
+四个阶段在源码里对应下面十四处判断，顺序即执行顺序。这份表用于对照代码，不建议当作入门的心智模型。
+
+| # | 层 | 判断什么 | 不通过会怎样 |
+|---|---|---|---|
+| ① | TUI | 是不是空串 | 直接丢弃 |
+| ② | TUI | 是不是内置斜杠命令 | 本地处理，不产生消息 |
+| ③ | TUI | 是不是 `!` / `!!` 开头 | 直接跑 shell，记成 `bashExecution` 消息 |
+| ④ | TUI | 压缩是不是正在跑 | 进 TUI 本地队列，压缩完再发 |
+| ⑤ | TUI | agent 是不是正在跑 | 转成 steer 排队 |
+| ⑥ | TUI | 以上都不是 | 交给 `AgentSession.prompt()` |
+| ⑦ | 产品层 | 是不是扩展注册的命令 | 立即执行并返回，不产生消息 |
+| ⑧ | 产品层 | 压缩是不是正在跑 | `throw` |
+| ⑨ | 产品层 | 扩展的 `input` 要不要拦 | `handled` 直接返回；`transform` 改写文本 |
+| ⑩ | 产品层 | 是 skill 还是 prompt 模板 | 替换成完整文本；都不匹配就原样通过 |
+| ⑪ | 产品层 | agent 是不是正在跑 | steer / followUp 排队，然后返回 |
+| ⑫ | 产品层 | 有没有模型、有没有凭据 | `throw` |
+| ⑬ | 产品层 | 上一条 assistant 是否溢出或超阈值 | 先压缩再继续 |
+| ⑭ | 产品层 | 扩展的 `before_agent_start` 要不要加料 | 追加 custom 消息、可整体替换 system prompt |
+
+内置命令声明 23 条（`BUILTIN_SLASH_COMMANDS`），`onSubmit` 里另有 `/debug`、`/arminsayshi`、`/dementedelves` 三条不进补全列表，实际处理 26 条。
+
+:::
+
+:::details 本页源码索引
 
 | 符号 | 位置 |
 |---|---|
@@ -318,8 +347,8 @@ if (result?.systemPrompt !== undefined) {
 | `emitInput` | `packages/coding-agent/src/core/extensions/runner.ts:1196` |
 | `emitBeforeAgentStart` | `packages/coding-agent/src/core/extensions/runner.ts:1081` |
 
-</details>
+:::
 
 ## 下一步
 
-→ [02.2 从上下文到请求体](./assembly) — 消息进了循环层之后的三次格式转换，以及 system prompt 到底什么时候拼好。
+→ [02.2 从领域消息到 Provider Payload](./assembly) — 消息组装好之后，为什么还要再降级两次。

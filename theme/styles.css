@@ -1,20 +1,3 @@
-:root {
-  /* Prefer CJK monospace fonts so text diagrams share one character grid. */
-  --diagram-mono-font: "Sarasa Mono SC", "Noto Sans Mono CJK SC",
-    "Source Han Mono SC", "LXGW WenKai Mono", "Microsoft YaHei Mono",
-    ui-monospace, "Cascadia Mono", Consolas, monospace;
-}
-
-.rspress-doc pre,
-.rspress-doc pre code,
-.rspress-doc [class^="language-"] pre,
-.rspress-doc [class^="language-"] code {
-  font-family: var(--diagram-mono-font);
-  font-variant-ligatures: none;
-  font-synthesis: none;
-  letter-spacing: 0;
-}
-
 /* Present Markdown tables as a single, scannable data surface. */
 .rspress-doc table {
   width: fit-content;

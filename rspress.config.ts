@@ -98,21 +98,31 @@ export default defineConfig({
             { text: '总览与阅读路线', link: '/pi/principle/' },
             { text: '01 总体架构与设计哲学', link: '/pi/principle/01-architecture' },
             {
-              text: '02 一条消息的旅程',
+              text: '02 输入如何进入 Agent',
               link: '/pi/principle/02-message-journey/',
               collapsed: false,
               items: [
-                { text: '02.1 十四道闸', link: '/pi/principle/02-message-journey/gates' },
-                { text: '02.2 从上下文到请求体', link: '/pi/principle/02-message-journey/assembly' },
+                { text: '02.1 输入管线', link: '/pi/principle/02-message-journey/gates' },
+                { text: '02.2 从领域消息到 Provider Payload', link: '/pi/principle/02-message-journey/assembly' },
               ],
             },
             {
-              text: '03 Agent Loop 与终止控制',
+              text: '03 Agent 如何持续工作并最终停止',
               link: '/pi/principle/03-agent-loop/',
               collapsed: false,
               items: [
-                { text: '03.1 循环怎么转', link: '/pi/principle/03-agent-loop/loop' },
-                { text: '03.2 怎么停下来', link: '/pi/principle/03-agent-loop/termination' },
+                { text: '03.1 从最小循环到生产循环', link: '/pi/principle/03-agent-loop/loop' },
+                { text: '03.2 停止、续跑与无人值守预算', link: '/pi/principle/03-agent-loop/termination' },
+              ],
+            },
+            {
+              text: '04 工具怎么被安全地执行',
+              link: '/pi/principle/04-tool-system/',
+              collapsed: false,
+              items: [
+                { text: '04.1 参数怎么进来', link: '/pi/principle/04-tool-system/contract' },
+                { text: '04.2 结果怎么回去', link: '/pi/principle/04-tool-system/execution' },
+                { text: '04.3 内置工具的容错与截断', link: '/pi/principle/04-tool-system/builtins' },
               ],
             },
             { text: '09 扩展体系与能力边界', link: '/pi/principle/09-extension-system' },

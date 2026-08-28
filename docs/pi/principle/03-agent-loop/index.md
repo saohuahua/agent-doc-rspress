@@ -1,180 +1,197 @@
 ---
-title: 03 Agent Loop 与终止控制
-description: 循环到底有几层、六个出口分别通向哪，以及 Pi 为什么没有 maxTurns
+title: 03 Agent 如何持续工作并最终停止
+description: 从最小 while 循环演进到 Pi 的生产循环，以及 agent_end 为什么不等于结束
 ---
 
-# 03 Agent Loop 与终止控制
+# 03 Agent 如何持续工作并最终停止
 
 以 **Pi v0.84.3 (+20, `8fa7eebd`)** 源码为基准。本章所有 `file:line` 经 `pnpm check:refs` 校验，代码块里的中文注释为本文补充。
 
-多轮循环与插队的基本形态在 [Learn 06](/learn/06-multi-turn) 讲过。本章要看的是 Pi 的实现里循环一共有几个出口、每个出口的判定条件，以及一个反直觉的事实：**Pi 没有轮数上限**。
+## 贯穿场景
 
-:::tip 一句话版本
-
-循环一共三层：等人输入的、决定要不要再跑一次的、真正在转的。真正在转的那一层只有六个出口，最常走的那个是"模型这轮没再要求调工具"——它**没有轮数计数器**。
-
-:::
-
-## 0. 本章回答哪些面试问题
-
-- **#1 AI Coding 整体的实现思路是什么** —— 三层循环的分工，以及"一轮"到底指什么
-- **#2 怎么保证执行过程中的准确性和可靠性** —— 六个出口、三层重试、abort 的观察点与晚到结果
-
-编号见交接文档 §12。
-
-## 一、问题：它读了同一个文件 47 次
-
-场景：让 agent 修一个类型错误，它开始循环。
+接着[第 02 章](../02-message-journey/)的那条消息，模型现在拿到了任务：
 
 ```text
-read src/types.ts     →  "我看看这个类型"
-read src/api.ts       →  "还得看调用方"
-read src/types.ts     →  "确认一下字段名"
-edit src/api.ts       →  改了
-bash tsc --noEmit     →  还是报错，位置换了一个
-read src/types.ts     →  "再看看"
-...
+修复 src/api.ts 的类型错误，并运行测试确认修复结果。
 ```
 
-它不会自己停。模型每一轮都觉得"再看一眼就明白了"，而每一轮的工具结果都给了它继续的理由。
+正常路径是：读文件 → 改代码 → 跑测试 → 看结果决定继续还是收工。本章要处理的是路径不正常的四种情况：
 
-这时候有三个问题要回答：
+- 模型反复读同一个文件，看起来停不下来
+- 测试命令跑了十分钟没返回
+- provider 返回了一个可重试的错误
+- `agent_end` 已经发出来了，界面却发现字还在往外冒
 
-| 问题 | Pi 的回答 | 详见 |
-|---|---|---|
-| **谁来喊停？** 循环里有没有计数器 | **没有计数器**，只有六个出口 | [03.1](./loop) |
-| **喊停之后，正在跑的工具怎么办？** | **大部分能杀掉，但不保证** | [03.2](./termination) |
-| **停下来之后是真的停了吗？** | **不是**，`agent_end` 之后还有事 | [03.2](./termination) |
+## 一、最小循环是怎么长成 Pi 的
 
-## 二、全景：三层循环，不是一层
+最小循环你已经写过（[Learn 06](/learn/06-multi-turn)）：
 
-很多人以为 Agent Loop 就是一个 `while`。Pi 里实际有三层，各管各的事：
+```typescript title="教学示例，非 Pi 源码" {2,5}
+while (true) {
+  const response = await callModel(messages);
+  if (!response.toolCalls.length) break;          // 没有工具调用就收工
+
+  const results = await executeTools(response.toolCalls);
+  messages.push(response, ...results);
+}
+```
+
+它能跑通，但每一条生产需求都会往上加一层：
+
+```text
+  最小 Agent Loop
+  while (true): 模型回复 → 执行工具 → 回填结果
+       │
+       ├─ 模型正常完成
+       │    没有 tool call → 退出，这条路径本来就成立
+       │
+       ├─ Provider 或回调出错
+       │    → error / aborted 提前退出；回调 throw 由 Agent 补事件兜底
+       │
+       ├─ 用户要求停止
+       │    → AbortSignal 沿着请求和工具往下传，阻止后续调用启动
+       │
+       ├─ 用户中途补充任务
+       │    → Steering 插当前轮之后、Follow-up 等全部结束后
+       │      两个队列把单层 while 撑成内外双层
+       │
+       ├─ Agent Loop 结束后仍需继续
+       │    → Session 层判断要不要 retry / 压缩后重跑 / 消化队列
+       │
+       └─ 无人值守运行需要硬预算
+            → Pi 默认没有；turn / time / token / cost 要自己加
+              最终兜底仍然依赖宿主进程或容器
+```
+
+**阅读路线**：先看清楚"哪些机制在循环里、哪些在循环外"。循环里的部分（正常结束、错误、中止、两个队列）在 [03.1](./loop)；循环外的部分（Session 续跑、预算、排障）在 [03.2](./termination)。本章不会给出一个"Pi 自带的防死循环开关"，因为它没有。
+
+## 二、最终的生命周期
+
+```text
+  prompt
+    ↓
+  Agent Loop ── turn 1 ── turn 2 ── ... ── agent_end
+    ↑                                        │
+    └──── Session retry / compaction ────────┘
+          / queued continuation
+                                             │
+                                             ▼
+                                       agent_settled
+```
+
+三件事需要先说清楚：
+
+- **`agent_end` 只表示一次底层 Agent Loop 结束**，不表示产品层不会再启动新的一次
+- **`agent_settled` 才表示产品层不会自动继续**，界面应该以它为准
+- **Pi 默认没有 turn、time、token、cost 的不可绕过硬上限**，交互式使用靠人盯着，无人值守要自己补
+
+## 三、三层循环
+
+按上面的生命周期展开，Pi 里实际有三层 `while`，各管一件事：
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
 │ L3  交互主循环         interactive-mode.ts:1176                          │
-│                                                                        │
 │     while (true) { userInput = await getUserInput(); session.prompt() } │
-│     管的是：等人说话。人不说话就一直阻塞                                    │
+│     管的是：等人说话                                                      │
 └──────────────────────────────┬─────────────────────────────────────────┘
                                │ 一条用户消息
 ┌──────────────────────────────▼─────────────────────────────────────────┐
 │ L2  运行后重跑循环      agent-session.ts:1085  _runAgentPrompt            │
-│                                                                        │
-│     await agent.prompt(messages);                                      │
 │     while (await this._handlePostAgentRun()) await agent.continue();   │
-│                                                                        │
-│     管的是：agent 停下来之后，要不要让它再跑一次                            │
-│       ① 可重试错误 → 退避后 continue                                     │
-│       ② 上下文溢出 → 压缩后 continue                                     │
-│       ③ 队列里还有 agent_end 处理器塞进来的消息 → continue                 │
+│     管的是：Agent Loop 停下来之后，要不要让它再跑一次                       │
+│       ① 可重试错误  ② 上下文溢出  ③ agent_end handler 塞进来的消息         │
 └──────────────────────────────┬─────────────────────────────────────────┘
                                │ agentLoop(...)
 ┌──────────────────────────────▼─────────────────────────────────────────┐
 │ L1  Agent Loop         agent-loop.ts:155  runLoop                       │
-│                                                                        │
-│     外层 while (true)  ← follow-up 队列非空就再来一圈                      │
-│       内层 while (hasMoreToolCalls || pendingMessages.length > 0)       │
-│         turn_start → 注入排队消息 → 请求模型 → 执行工具 → turn_end         │
-│         → prepareNextTurn → shouldStopAfterTurn → poll steering        │
-│                                                                        │
+│     外层 while：follow-up 队列非空就再来一圈                               │
+│       内层 while：模型还想调工具、或有排队消息                              │
 │     管的是：模型还想调工具就继续给它调                                      │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-三层的边界很清楚：**L1 决定"这次任务做完了没"，L2 决定"做完了要不要再来一次"，L3 决定"人还有没有别的要求"。**
+被问到"死循环怎么防"，先确认问的是哪一层——L1 转不停和 L2 转不停，排查方向完全不同。
 
-面试里被问"死循环怎么防"，先说清楚问的是哪一层——L1 的死循环和 L2 的死循环是两回事。
+## 四、控制流结果
 
-## 三、一轮到底是什么
+L1 的退出路径可以按"对循环意味着什么"分成四类，而不是拉成一张并列清单：
 
-先把 turn 这个词钉死。在 Pi 里，**一轮 = 一次模型回复 + 这次回复里所有工具调用的执行**。不是"一次请求"，也不是"一次用户交互"。
+**真正终止**
 
-L1 内层的循环条件只有两项：
-
-```typescript title="packages/agent/src/agent-loop.ts:170" {1,4}
-while (true) {                                     // 外层：follow-up 队列驱动
-  let hasMoreToolCalls = true;                     // 首轮必进，先假设有工具要调
-
-  while (hasMoreToolCalls || pendingMessages.length > 0) {   // 内层：工具调用驱动
-    // turn_start → 注入排队消息 → streamAssistantResponse → 执行工具 → turn_end
-```
-
-**模型还想调工具**，或者**有排队消息要注入**。没有第三项，没有计数器，没有时间上限。
-
-一句话概括 L1 的终止逻辑：**模型不再要求调工具，循环就结束。** 剩下的机制都是在这条主线上打的补丁。
-
-## 四、六个出口速查
-
-`runLoop` 有六种退出路径，每一种对外表现不同。这张表是本章最值得记的东西：
-
-| 出口 | 触发条件 | 位置 | 结果 | 谁能造成 |
-|---|---|---|---|---|
-| ① 错误/中止 | `stopReason` 是 `error` 或 `aborted` | `agent-loop.ts:196` | 发 turn_end + agent_end 后返回 | provider 报错、用户按 Esc |
-| ② 自然结束 | 没有工具调用，两个队列都空 | `agent-loop.ts:271` | break 出外层，发 agent_end | 模型自己决定 |
-| ③ 主动停止 | `shouldStopAfterTurn` 返回 true | `agent-loop.ts:247` | 直接发 agent_end，跳过队列轮询 | SDK 使用方 |
-| ④ 批次终止 | 整批工具结果全部 `terminate` 为 true | `agent-loop.ts:216` | hasMoreToolCalls 置假，走 ② | 扩展注册的工具、扩展阻断 |
-| ⑤ 抛异常 | 回调 throw 了 | `agent.ts:505` | 合成假消息，补四个事件 | 违反契约的回调 |
-| ⑥ follow-up 续跑 | 内层退出但 follow-up 队列非空 | `agent-loop.ts:264` | 不退出，continue 回内层 | 用户排队的任务 |
-
-六个里只有 ①②⑥ 是日常会走的。③ 产品层根本没接，④ 需要扩展配合且规则苛刻，⑤ 属于违反契约的异常路径。
-
-→ 逐个拆解见 [03.1 循环怎么转](./loop)
-
-## 五、终止控制的全貌
-
-把所有相关机制摊开，按"能不能真的兜住无限循环"分类：
-
-| | 机制 | 为什么 |
+| 情况 | 触发条件 | 位置 |
 |---|---|---|
-| ✅ 兜得住 | Abort | 用户按 Esc，唯一无条件生效的 |
-| ✅ 兜得住 | 上下文窗口 | 转得足够多一定会满，溢出恢复只做一次 |
-| ✅ 兜得住 | 钱 | 不是工程机制，但确实生效 |
-| ❌ 兜不住 | `terminate` | 要求整批工具结果全部为 true，且没有内置工具会设置它 |
-| ❌ 兜不住 | `shouldStopAfterTurn` | 产品层从来没接过，留给 SDK 使用方 |
-| ❌ 兜不住 | 轮数上限 | **不存在**，全仓只有测试文件里有这个常量 |
+| 自然结束 | 本轮没有工具调用，两个队列也空 | `agent-loop.ts:271` |
+| 错误或中止 | `stopReason` 是 `error` 或 `aborted` | `agent-loop.ts:196` |
+| 主动停止 | `shouldStopAfterTurn` 返回 true | `agent-loop.ts:247` |
 
-Pi 明确选择"人在环里"作为终止兜底。这个假设在 `--mode json` 和 SDK 无人值守场景下失效。
+**改变下一轮的条件**
 
-→ 展开与三层重试见 [03.2 怎么停下来](./termination)
+| 情况 | 触发条件 | 位置 |
+|---|---|---|
+| 批次终止 | 整批工具结果都设了 `terminate` | `agent-loop.ts:216` |
 
-## 六、边界：这套循环解决不了什么
+它不直接退出，而是把 `hasMoreToolCalls` 置假，让内层条件自然不成立，最终走"自然结束"。
 
-**没有轮数、时长、成本的硬上限。** 无人值守场景必须自己实现 `shouldStopAfterTurn`。
+**继续运行**
 
-**`terminate` 的全体一致规则太严。** 模型只要在同一条消息里多带一个工具调用，终止意图就失效。要可靠地"调用即结束"，得在扩展的 `tool_call` 里 `block` 掉其他调用，或者干脆只暴露一个工具。
+| 情况 | 触发条件 | 位置 |
+|---|---|---|
+| Steering | 每轮结束时队列非空 | `agent-loop.ts:259` |
+| Follow-up | 内层退出后队列非空 | `agent-loop.ts:263` |
 
-**Abort 不保证立即生效。** 已启动的并行工具必须等它自己结束。工具的中止响应质量完全取决于工具作者。
+**循环外的异常兜底**
 
-**回调 throw 会撕破事件序列。** `Agent` 层能补齐四个事件，但补不回半个 turn 的一致性。这条契约靠 JSDoc 维持，类型系统不管。
+回调违反 "must not throw" 契约时，异常会冒到 `Agent` 的 `handleRunFailure`（`packages/agent/src/agent.ts:511`），由它合成一条消息并补齐四个事件。这条路径严格说不在循环里，放进同一张表会混淆抽象层级。
 
-**没有"这一轮重来"的能力。** 重试的粒度是整个 assistant turn（把消息从状态里摘掉重发），不是"重放某个工具调用"。可重放执行是新一代 harness 的设计目标：记录日志的校验（`packages/agent/src/harness/reducer.ts:312` 的 `validateRecordLog`）和会话存储层都已实现，还配了一致性测试套件。没实现的是编排器的方法体，调用会抛 `HarnessNotImplemented`（`packages/agent/src/harness/agent-harness.ts:233`）。细节见第 07 章。
+→ 逐项展开见 [03.1 从最小循环到生产循环](./loop)
 
-**并行工具的事件顺序是隐式契约。** `tool_execution_end` 按完成顺序发，工具结果消息按模型给出的顺序发。这件事只写在 `toolExecution` 字段的 JSDoc 里（`packages/agent/src/types.ts:268`），类型系统管不住（第 04 章）。
+## 五、Pi 已解决和未解决的
+
+### 已经处理的
+
+- 模型不再要求调工具时自然退出，不需要额外判断
+- provider 错误、用户中止各有明确的退出路径和事件序列
+- 用户中途插话与排队后续任务，被拆成语义不同的两个队列
+- Agent Loop 结束后的自动重试、压缩重跑、队列续跑，统一收在 Session 层，对界面只暴露一个 `agent_settled`
+
+### 没有处理的
+
+- **没有 turn / time / token / cost 的默认硬上限。** 无人值守场景要自己实现，做法见 [03.2 §五](./termination)
+- **Abort 是协作式的。** 已经启动的工具必须自己响应 signal，否则 `agent.abort()` 不能让它立刻停
+- **`terminate` 要求整批一致。** 模型在同一条消息里多带一个工具调用，终止意图就失效
+- **回调 throw 只能补事件，补不回一致性。** 异常发生在半个 turn 中间时，订阅者会先收到半截真事件再收到一整套合成事件
+- **没有"重放某个工具调用"的能力。** 重试粒度是整个 assistant turn。可重放执行是新一代 harness 的设计目标：记录日志的校验（`packages/agent/src/harness/reducer.ts:312` 的 `validateRecordLog`）和会话存储层都已实现，没实现的是编排器方法体，调用会抛 `HarnessNotImplemented`（`packages/agent/src/harness/agent-harness.ts:233`），细节见第 07 章
+- **并行工具的事件顺序是隐式契约。** 只写在 `toolExecution` 字段的 JSDoc 里（`packages/agent/src/types.ts:268`），类型系统约束不了（[第 04 章](../04-tool-system/execution)）
+
+## 六、本章导航
+
+- [03.1 从最小循环到生产循环](./loop) —— 一轮的定义、自然结束、Steering、Follow-up 与内外双层结构
+- [03.2 停止、续跑与无人值守预算](./termination) —— Abort 的传播与局限、Session 续跑、四类预算的写法、排障决策树与验证矩阵
 
 ## 七、未验证与推断
 
-- ✅ 六个出口的位置与条件、三层循环的分工、队列轮询的三个点、`terminate` 的全体一致规则、三层重试的预算来源，均读源码得出并经 `check:refs` 校验
-- ✅ "生产代码没有轮数上限"经全仓 grep 确认，命中项只有测试文件
-- ⚠️ "扩展在 `agent_end` 里持续塞消息会让 L2 无限转"是从代码推的，未构造扩展实测
-- ⚠️ 抢救解析器产出"校验通过但内容残缺"的具体案例来自源码注释，未自行复现
+- ✅ 三层循环的分工、四类控制流结果的位置与条件、队列轮询的三个点，均读源码得出并经 `check:refs` 校验
+- ✅ "生产代码没有轮数上限"经全仓 grep 确认，命中项只在测试文件里
+- ⚠️ "扩展在 `agent_end` 里持续塞消息会让 L2 一直转"是从代码推的，未构造扩展实测
 - ❌ 未实测 abort 之后并行工具的实际残留时长
 - ❌ 未实测三层重试同时触发时的总耗时上界
 
-## 八、本章小结
+## 八、小结
 
-- 循环有三层：交互主循环 / 运行后重跑循环 / Agent Loop，"防死循环"要先问是哪一层
-- Agent Loop 内层的条件只有两项：模型还想调工具，或有排队消息。**没有计数器**
-- 六个出口：错误中止 / 自然结束 / `shouldStopAfterTurn` / 批次 `terminate` / 抛异常 / follow-up 续跑
-- `stopReason === "length"` 时整批工具调用作废，因为抢救解析器可能产出"校验通过但内容残缺"的参数
-- Steering 轮询两次（循环入口 + 每轮结束），follow-up 只在内层退出后轮询一次
-- `terminate` 要求整批一致，且没有内置工具会设置它；`shouldStopAfterTurn` 产品层根本没接
-- Pi 明确选择"人在环里"作为终止兜底。无人值守场景这个假设失效，得自己补
-- 三层重试用两个正则做错误分类，黑名单（配额/账单）在白名单（限流/网络）之前
-- `agent.abort()` 是请求中止不是立即中止；界面该听 `agent_settled` 而不是 `agent_end`
+- 最小循环的每一条生产需求都对应一层新增结构，Pi 的双层循环是这些需求叠加的结果
+- L1 管"模型还要不要调工具"，L2 管"停了要不要再跑一次"，L3 管"人还有没有别的要求"
+- L1 的退出路径分四类：真正终止、改变下一轮条件、继续运行、循环外兜底
+- `agent_end` 表示底层循环结束，`agent_settled` 才表示产品层不再自动继续
+- Pi 默认不提供硬预算，交互式靠人、无人值守靠你自己加
+
+:::details 面试对应（§12 编号）
+
+- **#1 AI Coding 整体的实现思路是什么** —— 用"最小循环 + 五层生产需求"讲演进，比背三层结构更容易展开
+- **#2 怎么保证执行过程中的准确性和可靠性** —— 四类控制流结果、三层重试、协作式中止的边界
+
+:::
 
 ## 下一步
 
-- → [03.1 循环怎么转](./loop) — 内外两层的代码、六个出口的细节、`length` 为什么要特殊处理、两个队列的三个轮询点
-- → [03.2 怎么停下来](./termination) — 防死循环的机制清单、三层重试、Abort 的观察点与晚到结果、`agent_end` 之后还会发生什么
-- → **04 工具系统** — 循环把参数交给工具之前和之后，各有哪些兜底
+→ [03.1 从最小循环到生产循环](./loop)

@@ -134,18 +134,28 @@ RAG / 向量库 / Rerank ｜ 训练与微调（LoRA / DPO / PPO）｜ A2A 协议
 - 设计哲学：核心小、扩展优于修改、事件驱动、类型安全、渐进复杂度
 - 关键：`packages/*/package.json` 依赖、`packages/agent/src/agent-loop.ts`、`packages/coding-agent/src/core/agent-session.ts`
 
-**02 一条消息的旅程** ★★★
-- 阶段：TUI 输入 → 斜杠命令 → 扩展 `input` 拦截 → Skill/模板展开 → 流式检查 → 模型与认证校验 → 压缩检查 → 构建上下文 → 发送
-- 关键：`coding-agent/src/core/agent-session.ts`、`modes/interactive/`、`core/slash-commands.ts`、`core/skills.ts`
+**02 输入如何进入 Agent** ★★★ ✅ 已重构
+- 主线：最小 `prompt(text)` → 四类现实问题 → 四阶段管线（输入分类 / 文本变换 / 运行前保护 / 上下文与装配）
+- 副线：`AgentMessage → Message → Provider Payload` 三层边界，为什么降级必然有损
+- “十四道闸”降为 `gates.md` 末尾附录，**不作为第一心智模型**
+- 关键：`coding-agent/src/core/agent-session.ts`、`modes/interactive/`、`core/slash-commands.ts`、`core/messages.ts`
 
-**03 Agent Loop 与终止控制** ★★★
-- 内外双层循环、`stopReason` 分支、Steering / Follow-up、Abort、Late Result
-- **死循环防御**：`terminate`、`shouldStopAfterTurn`、`maxTokens`、重试上限
-- 关键：`agent-loop.ts:31 agentLoop` `:155 runLoop` `:281 streamAssistantResponse` `:411 executeToolCalls` `:232 prepareNextTurn`；`agent/src/agent.ts`
+**03 Agent 如何持续工作并最终停止** ★★★ ✅ 已重构
+- 主线：最小 `while` → 每节只加一条生产需求（Steering → Follow-up → 错误/中止 → Session 续跑 → 无人值守预算）
+- 控制流结果分四类（真正终止 / 改变下一轮条件 / 继续运行 / 循环外兑底），**不再用“六个出口”统领**
+- 必须写清：Abort 是协作式中止；Pi **默认无** turn/time/token/cost 硬上限；`agent_settled` 才是终态
+- 必须包含：无人值守预算最小实现、排障决策树、验证矩阵
+- 关键：`agent-loop.ts:155 runLoop` `:167/:259/:262 两个队列轮询` `:540 Promise.all` `:629 signal` ；`agent.ts:319/361/475/511`
 
-**04 工具系统** ★★★
-- 工具契约、JSON Schema 校验、`prepareArguments` 兼容 shim、并行/串行、错误回填、输出截断、路径安全
-- 关键：`agent-loop.ts:586-760`、`coding-agent/src/core/tools/`（`bash.ts` 544 / `edit.ts` 461 / `read.ts` 358 / `truncate.ts` 276 / `path-utils.ts` 118）
+**04 工具怎么被安全地执行** ★★★ ✅ 已完成
+- 主线：最小 `executeTools()` 的两个隐含假设（参数是对的 / 工具会正常返回）都不成立 → **三段式**（prepare 600 / execute 670 / finalize 713）
+- 副线：**四层容错**——结构（`prepareArguments`）/ 类型（`validateToolArguments`）/ 内容（`fuzzyFindText`）/ 路径（`resolveReadPath`）
+- 核心结论：每条路径都产出一条结果，保证 tool call 与 toolResult 一一配对；校验失败是**可恢复错误**不是异常
+- 已还 03 的欠账：`length` 截断时整批作废的理由（抢救解析器会产出“合法但残缺”的参数）
+- 已校正 plan 旧描述：`path-utils.ts` **不是路径安全**，是 macOS NFD / 弯引号 / 窄空格的四级模糊回退；Pi **没有路径 jail**，也没有 read-before-edit 强制
+- 已校正 plan 旧描述：并发控制不在 `executionMode`（内置工具一个都没设），在 `withFileMutationQueue` 的**按文件粒度串行**；并行模式下 **预检仍然串行**
+- 截断的核心：**不是丢弃，是留续读入口**（`offset=N` / bash 替代命令 / 临时文件路径 / 改用哪个工具）
+- 目录 `04-tool-system/`：`index`（总览）+ `contract`（参数进来）+ `execution`（结果回去）+ `builtins`（内置工具）
 
 **05 Context Engineering** ★★★
 - System Prompt 分层构建、`AGENTS.md` 层叠与覆盖、Skills 渐进披露、Prompt 模板、上下文污染
@@ -189,25 +199,114 @@ RAG / 向量库 / Rerank ｜ 训练与微调（LoRA / DPO / PPO）｜ A2A 协议
 
 ## 6 写作规范
 
+### 6.0 写作基调（从 02/03 重构起适用于全板块）
+
+来源：`plan/PI_PRINCIPLE_02_03_REWRITE_PLAN.md`。它只针对 02/03 写，但**规则对 04–10 全部生效**。
+
+**目标读者已经知道**：Agent = “模型决策 → 工具执行 → 结果回填 → 再次决策”；`messages` / tool call / tool result / 流式 / 上下文窗口；最小 Agent 用一个 `while (true)` 能跑。正文**不重新教入门概念**。
+
+**每章必须回答同一组问题**：
+
+```
+最小实现长什么样
+  → 进入真实产品后暴露什么问题
+  → Pi 为此增加了哪些结构
+  → 每个结构为什么放在那个位置
+  → 仍然抹不平什么 / 自己开发时怎么补
+```
+
+**正文优先级**：`问题 → 最小实现 → Pi 的设计 → 关键源码 → 取舍 → 排障与验证`。
+
+**下列内容一律进折叠区**：完整 file:line 索引、低频异常分支、数量统计（“23 条声明 26 条实现”这类）、不影响核心心智模型的逐项源码证据、面试题对应。
+
+折叠区只能用 `:::details 标题`，**不能用原生 `<details>`**（会被剪掉，见 §6.3）。
+
+### 6.0.1 章首“上帝视角”（强制）
+
+每章总览页开头先给全局，再进代码。必须回答：最小版本是什么、Pi 依次增加了什么、每次增加解决什么问题、最终得到什么结构、哪些仍未解决。
+
+章首图**不是源码调用图，是设计演进图**：
+
+```
+最小实现
+  │
+  ├─ 遇到问题 A → Pi 增加机制 A
+  ├─ 遇到问题 B → Pi 增加机制 B
+  └─ 最终形成生产结构
+```
+
+图后跟一段 ≤150 字的**阅读路线**。读者只看图 + 导读就应能复述 Pi 的总体处理方式。
+
+每章至少两类图：**章首设计演进图** + **完整运行图**。图必须表达因果，不能只是排列文件名和函数名。
+
+### 6.0.2 最小示例规则（强制）
+
+每章必须有一段 ≤25 行的**教学版最小实现**，作为后文的骨架。
+
+- 代码块标题统一写 `title="教学示例，非 Pi 源码"`，与真源码引用区分
+- 示例里的每一行都要能在后文找到 Pi 的对应点
+- 示例后必须跟一句“Pi 比这个版本多做了什么”
+- 跨章尽量复用同一个任务和变量名
+
+**全板块贯穿场景**（从 02 开始，后续章节继续用）：
+
+```text
+修复 src/api.ts 的类型错误，并运行测试确认修复结果。
+```
+
+### 6.0.3 真实问题闭环（强制）
+
+每章至少处理 2–5 个真实现象，每个都要走完：
+
+```
+怎么识别 → 定位哪一层 → 如何修改 → 如何验证
+```
+
+只引题不收尾的场景不算闭环。涉及运行时行为的章（03、04、06、07）还要给**排障决策树**和**验证矩阵**。
+
 ### 6.1 每章固定结构
+
+长章拆成目录（见 §7.1）。**总览页**结构：
 
 ```markdown
 ---
-title: 0X 标题
+title: 0X 标题（用读者视角的问题，不用模块名）
 description: 一句话
 ---
 
 # 0X 标题
 
-> 以 Pi v0.84.3 (+20, 8fa7eebd) 源码为基准。所有 file:line 经 pnpm check:refs 校验。
+> 基准声明（v0.84.3 +20 8fa7eebd，check:refs，中文注释为本文补充）
 
-## 0. 本章回答哪些面试问题     ← 表格，写明 §12 编号
-## 1. 问题：<一个具体场景>      ← 必须具体，不能是抽象描述
-## 2. 全景图                   ← ASCII 或 mermaid
-## 3~N. 分主题拆解             ← 每节：先讲思路，再给必要代码，最后给取舍
-## N+1. 边界：抹不平什么        ← 什么情况下失效
-## N+2. 未验证 / 推断标记       ← ✅实测 / ⚠️推断 / ❌未做
-## N+3. 本章小结               ← 表格
+## 本章的起点        ← 读者已有认知 + 本章额外回答什么
+## 贯穿场景            ← 统一任务 + 本章要处理的异常
+## 一、最小实现是怎么长成 Pi 的   ← 设计演进图 + ≤150 字导读
+## 二、最终结构 / 生命周期图
+## 三、最小示例（≤25 行）
+## 四、Pi 比骨架多做了什么   ← 表：骨架那一行 / Pi 实际做的 / 展开位置
+## 五、本章导航
+## 六、Pi 没有解决的
+## 七、未验证与推断     ← ✅实测 / ⚠️推断 / ❌未做
+## 八、小结
+<details>面试对应（§12 编号）</details>   ← **不再放开头**
+## 下一步
+```
+
+**详解页**结构：
+
+```markdown
+[← 回到 0X 总览](./)｜基准声明
+
+## 一、<阶段名>
+### 最小实现怎么写
+### 会遇到什么问题
+### Pi 怎么处理      ← 关键源码在这里
+### 取舍与失败表现
+### 排查：<一个具体现象>
+## …（其余阶段同结构）
+## 小结
+<details>附录：完整清单 / 低频分支</details>
+<details>本页源码索引</details>
 ## 下一步
 ```
 
@@ -296,6 +395,22 @@ Rspress 1.47.2 默认主题的 `h2` 自带 `border-t-[1px]` 顶部分割线：
 
 **提倡的写法**：短句、先结论后展开、直陈事实、取舍成对出现（换来什么 + 代价是什么）。
 
+**重构后新增的禁止项**（来自 `PI_PRINCIPLE_02_03_REWRITE_PLAN.md` §7.4）：
+
+| 不要写 | 改成 |
+|---|---|
+| “这张表最值得记”“本章最重要的东西” | 直接说明这个设计解决了什么问题 |
+| “这样回答不及格”“面试里被问到……”插在正文中 | 面试表达集中放章末折叠区 |
+| “官方明确表态”等没有直接出处的判断 | 要么给出处，要么标 ⚠️ 归纳 |
+| “唯一”“全部”“一定”“永远”等绝对词 | 限定范围，或改成可核验的表述 |
+| 把源码作者视角的完整清单当开篇心智模型 | 先给分类和演进，清单沉到附录 |
+
+另外三条：
+
+- **区分三种叙述**：源码事实（带 file:line）/ 本文对设计的归纳（标明是归纳）/ 未验证推断（⚠️）
+- **分类要同层**：不把“真正终止”与“循环外异常兑底”放进同一张表
+- **不制造不存在的硬保障**：写 Abort / 上下文窗口 / 成本时，必须同时说明它们能被绕过的条件
+
 ### 6.3 Rspress 1.47.2 可用能力（已实测）
 
 下表是**实测结果**（写一个临时页面构建后看产物 HTML），不是推测：
@@ -305,7 +420,8 @@ Rspress 1.47.2 默认主题的 `h2` 自带 `border-t-[1px]` 顶部分割线：
 | 代码标题 | ` ```ts title="x.ts" ` | ✅ |
 | 行高亮 | ` ```ts {1,3-5} ` | ✅ |
 | 容器 | `:::tip/info/warning/danger` | ✅ |
-| 折叠区 | `<details><summary>` | ✅ |
+| 折叠区 | `:::details 标题` | ✅ 产出真的 `<details><summary>` |
+| 折叠区（原生 HTML） | `<details><summary>` | ❌ **包裹层和标题被剔掉**，内容会直接平铺出来 |
 | Mermaid | ` ```mermaid `（含 `sequenceDiagram`） | ✅ 客户端渲染 |
 | 代码组 | `:::code-group` | ❌ **原样输出 `:::code-group` 文本** |
 | shiki 标记 | `// [!code ++]` `// [!code highlight]` | ❌ **原样留在代码里** |
@@ -344,19 +460,21 @@ node scripts/session-stats.mjs --latest --cwd "D:/project/agent-doc-rspress"   #
 
 | 章 | 状态 | 备注 |
 |---|---|---|
-| index | ✅ | |
-| 01 架构 | ✅ | |
-| 02 消息旅程 | ✅ | 目录 `02-message-journey/`：`index`（总览）+ `gates`（十四道闸）+ `assembly`（三次转换） |
-| 03 Agent Loop | ✅ | 目录 `03-agent-loop/`：`index`（总览）+ `loop`（怎么转）+ `termination`（怎么停） |
-| 04 工具系统 | ⏳ | |
-| 05 Context Engineering | ⏳ | |
+| index | ✅ | 已改成“最小实现 → 产品化”的基调 |
+| 01 架构 | ✅ | ⚠️ 未按 §6.0 新基调重写，待补章首演进图与最小示例 |
+| 02 输入如何进入 Agent | ✅ | 已按 `PI_PRINCIPLE_02_03_REWRITE_PLAN.md` 重构；`index` + `gates` + `assembly` |
+| 03 Agent 如何持续工作并最终停止 | ✅ | 同上；`index` + `loop` + `termination`（含无人值守预算 / 决策树 / 验证矩阵） |
+| 04 工具怎么被安全地执行 | ✅ | 目录 `04-tool-system/`：`index` + `contract` + `execution` + `builtins`；已还 03 的 `length` 欠账 |
+| 05 Context Engineering | ⏳ | 下一章。已被 02.2 和 04.1 预告：system prompt 三层来源、`promptSnippet` / `guidelines` 怎么拼 |
 | 06 会话与压缩 | ⏳ | |
 | 07 断点续跑（概览） | ⏳ | |
 | 08 模型与 Provider | ⏳ | |
-| 09 扩展体系 | 🔄 | 已写完，待按新口径轻改 |
+| 09 扩展体系 | 🔄 | 554 行单页，需拆页 + 按 §6.0 新基调重写 |
 | 10 安全可观测（概览） | ⏳ | |
 
 写完一章：更新本表 → 更新 `docs/pi/principle/index.md` 的状态表 → 更新 `rspress.config.ts` 侧边栏 → 跑 `pnpm check` → 构建。
+
+**验收标准**（每章适用）：读者不看源码索引就能回答——最小实现为什么不够用、Pi 加的每个结构分别在哪一层、出了问题从哪里查、自己开发时该补什么。
 
 ### 7.1 长章拆页约定（从 02 / 03 开始适用）
 
@@ -378,11 +496,13 @@ docs/pi/principle/0X-name/
 
 ## 8 新对话接续指引
 
-1. 读本文件（尤其 §2.2 的四处纠错、§5 大纲、§6 规范）
+1. 读本文件（尤其 **§6.0 写作基调**、§2.2 四处纠错、§5 大纲、§7.1 拆页约定）
 2. 读 `docs/pi/principle/index.md` 看当前状态
-3. 读 `docs/pi/principle/01-architecture.md` 感受目标风格
+3. **风格样本换了**：读 `docs/pi/principle/03-agent-loop/`（index + loop + termination）。01 和 09 是旧基调，不要照抄
 4. 挑 §7 里第一个 ⏳ 的章节开写
 5. 写完跑 `pnpm check` 和构建，更新 §7 与 index 状态表
+
+开写前先把这五件事想清楚（§6.0）：最小实现是什么 → 产品化后碎在哪 → Pi 加了什么 → 为什么放那个位置 → 还差什么。想不清楚就先别写。
 
 **不需要**回溯历史会话，也**不需要**重读 `PI_AGENT_HANDOFF.md` 全文（它在 §2.2 列出的四点上已过时）。
 
@@ -393,6 +513,7 @@ docs/pi/principle/0X-name/
 | 文件 | 作用 |
 |---|---|
 | `PI_AGENT_HANDOFF.md` | 项目总交接，注意 §2.2 的四处已过时 |
+| `plan/PI_PRINCIPLE_02_03_REWRITE_PLAN.md` | 02/03 重构规划。**其中 §2、§4、§7 的规则已提升为全板块基调**，写入本文 §6.0；§5、§6、§8 是 02/03 专用，已执行完毕 |
 | `plan/DOC_WRITING_PLAN.md` | 旧规划，Part 2 部分已被本文件取代 |
 | `scripts/check-source-refs.mjs` | 源码引用校验 |
 | `scripts/check-links.mjs` | 站内链接校验 |
