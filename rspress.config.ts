@@ -17,9 +17,9 @@ export default defineConfig({
   },
   root: path.join(__dirname, 'docs'),
   lang: 'zh',
-  title: 'Agent 学习与实验',
-  description: '从 Agent 基础到 Pi Coding Agent 原理与二次开发',
-  logoText: 'Agent Doc',
+  title: 'Agent 笔记',
+  description: 'Agent 学习与 Pi 源码解析 · 面经八股速查',
+  logoText: 'Agent 笔记',
   themeConfig: {
     nav: [
       { text: '首页', link: '/', activeMatch: '^/$' },

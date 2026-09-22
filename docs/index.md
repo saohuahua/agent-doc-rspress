@@ -2,9 +2,8 @@
 pageType: home
 
 hero:
-  name: Agent 学习与实验
-  text: 从零到深入的 Agent 开发之旅
-  tagline: 建立 Agent 心智模型，深入 Pi Coding Agent 源码，探索二次开发
+  name: Agent 笔记
+  text: Pi 源码 · Agent 原理 · 面经
   actions:
     - theme: brand
       text: 开始学习 Agent
