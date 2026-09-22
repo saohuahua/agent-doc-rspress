@@ -1,6 +1,13 @@
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { defineConfig } from 'rspress/config';
 import { pluginMermaid } from './mermaid-plugin';
+
+// 面经侧栏由 scripts/sync-interview.mjs 生成（条目文本取自源文件 H1）
+const interviewSidebarFile = path.join(__dirname, 'docs/interview/_sidebar.json');
+const interviewSidebar = fs.existsSync(interviewSidebarFile)
+  ? JSON.parse(fs.readFileSync(interviewSidebarFile, 'utf8'))
+  : [];
 
 export default defineConfig({
   base: '/agent-doc-rspress/',
@@ -20,6 +27,7 @@ export default defineConfig({
       { text: 'Pi 指南', link: '/pi/guide/', activeMatch: '/pi/guide/' },
       { text: 'Pi 原理', link: '/pi/principle/', activeMatch: '/pi/principle/' },
       { text: '实验室', link: '/pi/lab/', activeMatch: '/pi/lab/' },
+      { text: '面经', link: '/interview/', activeMatch: '/interview/' },
       { text: '使用记录', link: '/practice/', activeMatch: '/practice/' },
     ],
     sidebar: {
@@ -137,6 +145,7 @@ export default defineConfig({
           ],
         },
       ],
+      '/interview/': interviewSidebar,
       '/practice/': [
         {
           text: '使用记录',

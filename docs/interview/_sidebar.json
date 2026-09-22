@@ -1,0 +1,181 @@
+[
+  {
+    "text": "总览",
+    "items": [
+      {
+        "text": "面经速查",
+        "link": "/interview/"
+      }
+    ]
+  },
+  {
+    "text": "Agent 面经",
+    "items": [
+      {
+        "text": "Agent 基础概念",
+        "link": "/interview/agent/00-agent-basics"
+      },
+      {
+        "text": "Agent Runtime 与架构",
+        "link": "/interview/agent/01-agent-runtime-architecture"
+      },
+      {
+        "text": "LangChain 与 LangGraph",
+        "link": "/interview/agent/02-langchain-langgraph"
+      },
+      {
+        "text": "Memory 与 Context 工程",
+        "link": "/interview/agent/02-memory-and-context"
+      },
+      {
+        "text": "Skill 机制",
+        "link": "/interview/agent/03-skills"
+      },
+      {
+        "text": "RAG 面经",
+        "link": "/interview/agent/05-rag"
+      },
+      {
+        "text": "MCP 面经",
+        "link": "/interview/agent/06-mcp"
+      },
+      {
+        "text": "2026 秋招 Agent 面经合集",
+        "link": "/interview/agent/2026-autumn-agent-interview-collection"
+      }
+    ]
+  },
+  {
+    "text": "JavaScript",
+    "items": [
+      {
+        "text": "JavaScript 语言基础",
+        "link": "/interview/frontend/js-basics"
+      },
+      {
+        "text": "JavaScript 核心机制",
+        "link": "/interview/frontend/js-core"
+      },
+      {
+        "text": "JavaScript 浏览器与工程",
+        "link": "/interview/frontend/js-browser"
+      }
+    ]
+  },
+  {
+    "text": "TypeScript",
+    "items": [
+      {
+        "text": "TypeScript",
+        "link": "/interview/frontend/typescript"
+      }
+    ]
+  },
+  {
+    "text": "CSS",
+    "items": [
+      {
+        "text": "CSS 基础",
+        "link": "/interview/frontend/css3"
+      },
+      {
+        "text": "Flex 布局",
+        "link": "/interview/frontend/flex"
+      }
+    ]
+  },
+  {
+    "text": "HTML",
+    "items": [
+      {
+        "text": "HTML5 基础",
+        "link": "/interview/frontend/html5"
+      }
+    ]
+  },
+  {
+    "text": "Vue / Nuxt",
+    "items": [
+      {
+        "text": "Vue",
+        "link": "/interview/frontend/vue"
+      },
+      {
+        "text": "Nuxt",
+        "link": "/interview/frontend/nuxt"
+      }
+    ]
+  },
+  {
+    "text": "Node.js",
+    "items": [
+      {
+        "text": "Node.js",
+        "link": "/interview/frontend/nodejs"
+      }
+    ]
+  },
+  {
+    "text": "打包工具",
+    "items": [
+      {
+        "text": "打包工具",
+        "link": "/interview/frontend/bundlers"
+      }
+    ]
+  },
+  {
+    "text": "网络",
+    "items": [
+      {
+        "text": "计算机网络",
+        "link": "/interview/frontend/network"
+      }
+    ]
+  },
+  {
+    "text": "Git",
+    "items": [
+      {
+        "text": "Git",
+        "link": "/interview/frontend/git"
+      }
+    ]
+  },
+  {
+    "text": "前端安全",
+    "items": [
+      {
+        "text": "前端安全",
+        "link": "/interview/frontend/web-security"
+      }
+    ]
+  },
+  {
+    "text": "性能优化",
+    "items": [
+      {
+        "text": "前端性能优化",
+        "link": "/interview/frontend/web-performance"
+      }
+    ]
+  },
+  {
+    "text": "AI 面经",
+    "items": [
+      {
+        "text": "AI 面经",
+        "link": "/interview/frontend/ai-interview"
+      }
+    ]
+  },
+  {
+    "text": "手撕代码",
+    "items": [
+      {
+        "text": "链表题集",
+        "link": "/interview/coding/linked-list"
+      }
+    ]
+  }
+]

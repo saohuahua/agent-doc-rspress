@@ -12,6 +12,9 @@ hero:
     - theme: alt
       text: Pi 使用指南
       link: /pi/guide/
+    - theme: alt
+      text: 面经速查
+      link: /interview/
 
 features:
   - title: Learn Agent
@@ -26,4 +29,10 @@ features:
   - title: 实验室
     details: 基于 Pi 的二次开发路线与差异化实验，探索 Extension、Skill、Provider 等扩展机制。
     icon: 🧪
+  - title: 面经速查
+    details: Agent 面经、前端八股、手撕模板，按技术主题分组：JavaScript、CSS、Vue、网络、打包工具……持续更新。
+    icon: 🎯
+  - title: 使用记录
+    details: 环境基线、实验记录与踩坑归档，按日期索引的实践笔记。
+    icon: 🗂️
 ---
