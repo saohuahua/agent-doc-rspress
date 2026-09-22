@@ -19,6 +19,9 @@ description: 从零开始理解 Agent 的核心概念
 | [06 多轮交互与用户插队](./06-multi-turn) | Agent 工作时用户能打断吗？ |
 | [07 副作用与安全边界](./07-side-effects-and-safety) | Agent 能执行 `rm -rf /` 吗？ |
 | [08 会话保存与恢复](./08-session-and-persistence) | 关掉终端，对话就丢了吗？ |
+| [09 规划与任务分解](./09-planning-and-todos) | 模型做到第 3 步还记得第 4 步吗？ |
+| [10 错误恢复与重试分类](./10-error-recovery) | 调用失败了，哪些错误值得重试？ |
+| [11 上下文工程](./11-context-engineering) | 每一轮到底该让模型看到什么？ |
 
 ## 读完后
 
