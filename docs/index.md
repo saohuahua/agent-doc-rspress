@@ -3,7 +3,7 @@ pageType: home
 
 hero:
   name: Agent 笔记
-  text: Pi 源码 · Agent 原理 · 面经
+  text: Pi 源码 · Agent 原理 · 面经 · 力扣
   actions:
     - theme: brand
       text: 开始学习 Agent
@@ -14,6 +14,9 @@ hero:
     - theme: alt
       text: 面经速查
       link: /interview/
+    - theme: alt
+      text: 力扣 Hot100
+      link: /leetcode/
 
 features:
   - title: Learn Agent
@@ -31,6 +34,9 @@ features:
   - title: 面经速查
     details: Agent 面经、前端八股、手撕模板，按技术主题分组：JavaScript、CSS、Vue、网络、打包工具……持续更新。
     icon: 🎯
+  - title: 力扣 Hot100
+    details: 17 类 100 题的中文题解教材：问题定义 → 朴素方法 → 计算瓶颈 → 状态设计 → 正确性依据 → 实现，附 TypeScript 实现与章节复习自测。
+    icon: 🧩
   - title: 使用记录
     details: 环境基线、实验记录与踩坑归档，按日期索引的实践笔记。
     icon: 🗂️
