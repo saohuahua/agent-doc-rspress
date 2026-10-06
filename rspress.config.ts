@@ -11,6 +11,8 @@ const interviewSidebar = fs.existsSync(interviewSidebarFile)
 
 export default defineConfig({
   base: '/agent-doc-rspress/',
+  icon: '/favicon.svg',
+  logo: '/favicon.svg',
   plugins: [pluginMermaid()],
   markdown: {
     mdxRs: false,
