@@ -31,6 +31,8 @@ for (const f of files) {
   while ((m = re.exec(md))) {
     const link = m[1];
     if (!link) continue;
+    // 静态资源（图示/图片等）不是页面路由，跳过
+    if (/\.(svg|png|jpe?g|gif|webp|avif|bmp|ico|mp4|webm|pdf)$/i.test(link)) continue;
     let target = link.startsWith("/") ? link : path.posix.normalize(path.posix.join(dir, link));
     const ok =
       routes.has(target) ||
