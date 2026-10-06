@@ -9,9 +9,11 @@
     "check": "node scripts/check-links.mjs && node scripts/check-source-refs.mjs",
     "check:links": "node scripts/check-links.mjs",
     "check:refs": "node scripts/check-source-refs.mjs",
-    "sync:interview": "node scripts/sync-interview.mjs"
+    "sync:interview": "node scripts/sync-interview.mjs",
+    "sync:leetcode": "node scripts/sync-leetcode.mjs"
   },
   "dependencies": {
+    "@rspress/plugin-shiki": "1.47.2",
     "mermaid": "^11.17.1",
     "rspress": "^1.47.2",
     "unist-util-visit": "^5.1.0"

@@ -1,7 +1,28 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { defineConfig } from 'rspress/config';
+import { pluginShiki, createTransformerHighlight } from '@rspress/plugin-shiki';
 import { pluginMermaid } from './mermaid-plugin';
+
+// 站点文档里出现的围栏语言，除了插件内置的那批（js/ts/jsx/tsx/json/css/scss/less/xml/diff/yaml/md/mdx/bash）
+// 之外还有下面这些：有语法文件的显式注册，没有语法文件的（plain / text / gitignore）用空语法注册。
+// 不注册的话 @rspress/plugin-shiki 会直接让构建失败（No language registration for xxx）。
+const EXTRA_SHIKI_LANGS = [
+  'html',
+  'http',
+  'javascript',
+  'latex',
+  'lua',
+  'markdown',
+  'mermaid',
+  'nginx',
+  'python',
+  'toml',
+  'typescript',
+  'vue',
+  'dockerfile',
+];
+const EMPTY_SHIKI_LANGS = ['plain', 'text', 'gitignore'];
 
 // 面经侧栏由 scripts/sync-interview.mjs 生成（条目文本取自源文件 H1）
 const interviewSidebarFile = path.join(__dirname, 'docs/interview/_sidebar.json');
@@ -9,13 +30,34 @@ const interviewSidebar = fs.existsSync(interviewSidebarFile)
   ? JSON.parse(fs.readFileSync(interviewSidebarFile, 'utf8'))
   : [];
 
+// 力扣侧栏由 scripts/sync-leetcode.mjs 生成（章节取自源仓库 data/hot100.json）
+const leetcodeSidebarFile = path.join(__dirname, 'docs/leetcode/_sidebar.json');
+const leetcodeSidebar = fs.existsSync(leetcodeSidebarFile)
+  ? JSON.parse(fs.readFileSync(leetcodeSidebarFile, 'utf8'))
+  : [];
+
 export default defineConfig({
   base: '/agent-doc-rspress/',
   icon: '/favicon.svg',
   logo: '/favicon.svg',
-  plugins: [pluginMermaid()],
+  plugins: [
+    pluginShiki({
+      // 行内标注 // [!code highlight] 需要显式开启 highlight 转换器（插件默认不带任何转换器）
+      transformers: [createTransformerHighlight()],
+      langs: [
+        ...EXTRA_SHIKI_LANGS,
+        ...EMPTY_SHIKI_LANGS.map((id) => ({
+          id,
+          scopeName: `text.${id}`,
+          grammar: { scopeName: `text.${id}`, patterns: [] },
+        })),
+      ],
+    }),
+    pluginMermaid(),
+  ],
   markdown: {
     mdxRs: false,
+    showLineNumbers: true,
   },
   root: path.join(__dirname, 'docs'),
   lang: 'zh',
@@ -30,6 +72,7 @@ export default defineConfig({
       { text: 'Pi 原理', link: '/pi/principle/', activeMatch: '/pi/principle/' },
       { text: '实验室', link: '/pi/lab/', activeMatch: '/pi/lab/' },
       { text: '面经', link: '/interview/', activeMatch: '/interview/' },
+      { text: '力扣', link: '/leetcode/', activeMatch: '/leetcode/' },
       { text: '使用记录', link: '/practice/', activeMatch: '/practice/' },
     ],
     sidebar: {
@@ -148,6 +191,7 @@ export default defineConfig({
         },
       ],
       '/interview/': interviewSidebar,
+      '/leetcode/': leetcodeSidebar,
       '/practice/': [
         {
           text: '使用记录',
