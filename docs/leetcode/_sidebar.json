@@ -1,0 +1,669 @@
+[
+  {
+    "text": "总览",
+    "items": [
+      {
+        "text": "力扣 Hot100 教材",
+        "link": "/leetcode/"
+      },
+      {
+        "text": "官方题单与教材索引",
+        "link": "/leetcode/catalog"
+      },
+      {
+        "text": "算法图示索引",
+        "link": "/leetcode/figures"
+      },
+      {
+        "text": "混合复习入口",
+        "link": "/leetcode/mixed"
+      }
+    ]
+  },
+  {
+    "text": "算法入门与 TypeScript 基础",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/00-intro/"
+      },
+      {
+        "text": "算法问题的分析方法",
+        "link": "/leetcode/00-intro/01-how-to-think"
+      },
+      {
+        "text": "复杂度与数据结构",
+        "link": "/leetcode/00-intro/02-complexity-and-structures"
+      },
+      {
+        "text": "TypeScript 运行时与递归",
+        "link": "/leetcode/00-intro/03-ts-runtime-and-recursion"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/00-intro/review"
+      }
+    ]
+  },
+  {
+    "text": "哈希",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/01-hash/"
+      },
+      {
+        "text": "两数之和",
+        "link": "/leetcode/01-hash/0001-two-sum"
+      },
+      {
+        "text": "字母异位词分组",
+        "link": "/leetcode/01-hash/0049-group-anagrams"
+      },
+      {
+        "text": "最长连续序列",
+        "link": "/leetcode/01-hash/0128-longest-consecutive-sequence"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/01-hash/review"
+      }
+    ]
+  },
+  {
+    "text": "双指针",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/02-two-pointers/"
+      },
+      {
+        "text": "移动零",
+        "link": "/leetcode/02-two-pointers/0283-move-zeroes"
+      },
+      {
+        "text": "盛最多水的容器",
+        "link": "/leetcode/02-two-pointers/0011-container-with-most-water"
+      },
+      {
+        "text": "三数之和",
+        "link": "/leetcode/02-two-pointers/0015-3sum"
+      },
+      {
+        "text": "接雨水",
+        "link": "/leetcode/02-two-pointers/0042-trapping-rain-water"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/02-two-pointers/review"
+      }
+    ]
+  },
+  {
+    "text": "滑动窗口",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/03-sliding-window/"
+      },
+      {
+        "text": "无重复字符的最长子串",
+        "link": "/leetcode/03-sliding-window/0003-longest-substring-without-repeating-characters"
+      },
+      {
+        "text": "找到字符串中所有字母异位词",
+        "link": "/leetcode/03-sliding-window/0438-find-all-anagrams-in-a-string"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/03-sliding-window/review"
+      }
+    ]
+  },
+  {
+    "text": "子串",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/04-substring/"
+      },
+      {
+        "text": "和为 K 的子数组",
+        "link": "/leetcode/04-substring/0560-subarray-sum-equals-k"
+      },
+      {
+        "text": "滑动窗口最大值",
+        "link": "/leetcode/04-substring/0239-sliding-window-maximum"
+      },
+      {
+        "text": "最小覆盖子串",
+        "link": "/leetcode/04-substring/0076-minimum-window-substring"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/04-substring/review"
+      }
+    ]
+  },
+  {
+    "text": "普通数组",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/05-array/"
+      },
+      {
+        "text": "最大子数组和",
+        "link": "/leetcode/05-array/0053-maximum-subarray"
+      },
+      {
+        "text": "合并区间",
+        "link": "/leetcode/05-array/0056-merge-intervals"
+      },
+      {
+        "text": "轮转数组",
+        "link": "/leetcode/05-array/0189-rotate-array"
+      },
+      {
+        "text": "除了自身以外数组的乘积",
+        "link": "/leetcode/05-array/0238-product-of-array-except-self"
+      },
+      {
+        "text": "缺失的第一个正数",
+        "link": "/leetcode/05-array/0041-first-missing-positive"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/05-array/review"
+      }
+    ]
+  },
+  {
+    "text": "矩阵",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/06-matrix/"
+      },
+      {
+        "text": "矩阵置零",
+        "link": "/leetcode/06-matrix/0073-set-matrix-zeroes"
+      },
+      {
+        "text": "螺旋矩阵",
+        "link": "/leetcode/06-matrix/0054-spiral-matrix"
+      },
+      {
+        "text": "旋转图像",
+        "link": "/leetcode/06-matrix/0048-rotate-image"
+      },
+      {
+        "text": "搜索二维矩阵 II",
+        "link": "/leetcode/06-matrix/0240-search-a-2d-matrix-ii"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/06-matrix/review"
+      }
+    ]
+  },
+  {
+    "text": "链表",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/07-linked-list/"
+      },
+      {
+        "text": "相交链表",
+        "link": "/leetcode/07-linked-list/0160-intersection-of-two-linked-lists"
+      },
+      {
+        "text": "反转链表",
+        "link": "/leetcode/07-linked-list/0206-reverse-linked-list"
+      },
+      {
+        "text": "回文链表",
+        "link": "/leetcode/07-linked-list/0234-palindrome-linked-list"
+      },
+      {
+        "text": "环形链表",
+        "link": "/leetcode/07-linked-list/0141-linked-list-cycle"
+      },
+      {
+        "text": "环形链表 II",
+        "link": "/leetcode/07-linked-list/0142-linked-list-cycle-ii"
+      },
+      {
+        "text": "合并两个有序链表",
+        "link": "/leetcode/07-linked-list/0021-merge-two-sorted-lists"
+      },
+      {
+        "text": "两数相加",
+        "link": "/leetcode/07-linked-list/0002-add-two-numbers"
+      },
+      {
+        "text": "删除链表的倒数第 N 个结点",
+        "link": "/leetcode/07-linked-list/0019-remove-nth-node-from-end-of-list"
+      },
+      {
+        "text": "两两交换链表中的节点",
+        "link": "/leetcode/07-linked-list/0024-swap-nodes-in-pairs"
+      },
+      {
+        "text": "K 个一组翻转链表",
+        "link": "/leetcode/07-linked-list/0025-reverse-nodes-in-k-group"
+      },
+      {
+        "text": "随机链表的复制",
+        "link": "/leetcode/07-linked-list/0138-copy-list-with-random-pointer"
+      },
+      {
+        "text": "排序链表",
+        "link": "/leetcode/07-linked-list/0148-sort-list"
+      },
+      {
+        "text": "合并 K 个升序链表",
+        "link": "/leetcode/07-linked-list/0023-merge-k-sorted-lists"
+      },
+      {
+        "text": "LRU 缓存",
+        "link": "/leetcode/07-linked-list/0146-lru-cache"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/07-linked-list/review"
+      }
+    ]
+  },
+  {
+    "text": "二叉树",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/08-binary-tree/"
+      },
+      {
+        "text": "二叉树的中序遍历",
+        "link": "/leetcode/08-binary-tree/0094-binary-tree-inorder-traversal"
+      },
+      {
+        "text": "二叉树的最大深度",
+        "link": "/leetcode/08-binary-tree/0104-maximum-depth-of-binary-tree"
+      },
+      {
+        "text": "翻转二叉树",
+        "link": "/leetcode/08-binary-tree/0226-invert-binary-tree"
+      },
+      {
+        "text": "对称二叉树",
+        "link": "/leetcode/08-binary-tree/0101-symmetric-tree"
+      },
+      {
+        "text": "二叉树的直径",
+        "link": "/leetcode/08-binary-tree/0543-diameter-of-binary-tree"
+      },
+      {
+        "text": "二叉树的层序遍历",
+        "link": "/leetcode/08-binary-tree/0102-binary-tree-level-order-traversal"
+      },
+      {
+        "text": "将有序数组转换为二叉搜索树",
+        "link": "/leetcode/08-binary-tree/0108-convert-sorted-array-to-binary-search-tree"
+      },
+      {
+        "text": "验证二叉搜索树",
+        "link": "/leetcode/08-binary-tree/0098-validate-binary-search-tree"
+      },
+      {
+        "text": "二叉搜索树中第 K 小的元素",
+        "link": "/leetcode/08-binary-tree/0230-kth-smallest-element-in-a-bst"
+      },
+      {
+        "text": "二叉树的右视图",
+        "link": "/leetcode/08-binary-tree/0199-binary-tree-right-side-view"
+      },
+      {
+        "text": "二叉树展开为链表",
+        "link": "/leetcode/08-binary-tree/0114-flatten-binary-tree-to-linked-list"
+      },
+      {
+        "text": "从前序与中序遍历序列构造二叉树",
+        "link": "/leetcode/08-binary-tree/0105-construct-binary-tree-from-preorder-and-inorder-traversal"
+      },
+      {
+        "text": "路径总和 III",
+        "link": "/leetcode/08-binary-tree/0437-path-sum-iii"
+      },
+      {
+        "text": "二叉树的最近公共祖先",
+        "link": "/leetcode/08-binary-tree/0236-lowest-common-ancestor-of-a-binary-tree"
+      },
+      {
+        "text": "二叉树中的最大路径和",
+        "link": "/leetcode/08-binary-tree/0124-binary-tree-maximum-path-sum"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/08-binary-tree/review"
+      }
+    ]
+  },
+  {
+    "text": "图论",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/09-graph/"
+      },
+      {
+        "text": "岛屿数量",
+        "link": "/leetcode/09-graph/0200-number-of-islands"
+      },
+      {
+        "text": "腐烂的橘子",
+        "link": "/leetcode/09-graph/0994-rotting-oranges"
+      },
+      {
+        "text": "课程表",
+        "link": "/leetcode/09-graph/0207-course-schedule"
+      },
+      {
+        "text": "实现 Trie (前缀树)",
+        "link": "/leetcode/09-graph/0208-implement-trie-prefix-tree"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/09-graph/review"
+      }
+    ]
+  },
+  {
+    "text": "回溯",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/10-backtracking/"
+      },
+      {
+        "text": "全排列",
+        "link": "/leetcode/10-backtracking/0046-permutations"
+      },
+      {
+        "text": "子集",
+        "link": "/leetcode/10-backtracking/0078-subsets"
+      },
+      {
+        "text": "电话号码的字母组合",
+        "link": "/leetcode/10-backtracking/0017-letter-combinations-of-a-phone-number"
+      },
+      {
+        "text": "组合总和",
+        "link": "/leetcode/10-backtracking/0039-combination-sum"
+      },
+      {
+        "text": "括号生成",
+        "link": "/leetcode/10-backtracking/0022-generate-parentheses"
+      },
+      {
+        "text": "单词搜索",
+        "link": "/leetcode/10-backtracking/0079-word-search"
+      },
+      {
+        "text": "分割回文串",
+        "link": "/leetcode/10-backtracking/0131-palindrome-partitioning"
+      },
+      {
+        "text": "N 皇后",
+        "link": "/leetcode/10-backtracking/0051-n-queens"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/10-backtracking/review"
+      }
+    ]
+  },
+  {
+    "text": "二分查找",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/11-binary-search/"
+      },
+      {
+        "text": "搜索插入位置",
+        "link": "/leetcode/11-binary-search/0035-search-insert-position"
+      },
+      {
+        "text": "搜索二维矩阵",
+        "link": "/leetcode/11-binary-search/0074-search-a-2d-matrix"
+      },
+      {
+        "text": "在排序数组中查找元素的第一个和最后一个位置",
+        "link": "/leetcode/11-binary-search/0034-find-first-and-last-position-of-element-in-sorted-array"
+      },
+      {
+        "text": "搜索旋转排序数组",
+        "link": "/leetcode/11-binary-search/0033-search-in-rotated-sorted-array"
+      },
+      {
+        "text": "寻找旋转排序数组中的最小值",
+        "link": "/leetcode/11-binary-search/0153-find-minimum-in-rotated-sorted-array"
+      },
+      {
+        "text": "寻找两个正序数组的中位数",
+        "link": "/leetcode/11-binary-search/0004-median-of-two-sorted-arrays"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/11-binary-search/review"
+      }
+    ]
+  },
+  {
+    "text": "栈",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/12-stack/"
+      },
+      {
+        "text": "有效的括号",
+        "link": "/leetcode/12-stack/0020-valid-parentheses"
+      },
+      {
+        "text": "最小栈",
+        "link": "/leetcode/12-stack/0155-min-stack"
+      },
+      {
+        "text": "字符串解码",
+        "link": "/leetcode/12-stack/0394-decode-string"
+      },
+      {
+        "text": "每日温度",
+        "link": "/leetcode/12-stack/0739-daily-temperatures"
+      },
+      {
+        "text": "柱状图中最大的矩形",
+        "link": "/leetcode/12-stack/0084-largest-rectangle-in-histogram"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/12-stack/review"
+      }
+    ]
+  },
+  {
+    "text": "堆",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/13-heap/"
+      },
+      {
+        "text": "数组中的第K个最大元素",
+        "link": "/leetcode/13-heap/0215-kth-largest-element-in-an-array"
+      },
+      {
+        "text": "前 K 个高频元素",
+        "link": "/leetcode/13-heap/0347-top-k-frequent-elements"
+      },
+      {
+        "text": "数据流的中位数",
+        "link": "/leetcode/13-heap/0295-find-median-from-data-stream"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/13-heap/review"
+      }
+    ]
+  },
+  {
+    "text": "贪心算法",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/14-greedy/"
+      },
+      {
+        "text": "买卖股票的最佳时机",
+        "link": "/leetcode/14-greedy/0121-best-time-to-buy-and-sell-stock"
+      },
+      {
+        "text": "跳跃游戏",
+        "link": "/leetcode/14-greedy/0055-jump-game"
+      },
+      {
+        "text": "跳跃游戏 II",
+        "link": "/leetcode/14-greedy/0045-jump-game-ii"
+      },
+      {
+        "text": "划分字母区间",
+        "link": "/leetcode/14-greedy/0763-partition-labels"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/14-greedy/review"
+      }
+    ]
+  },
+  {
+    "text": "动态规划",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/15-dp/"
+      },
+      {
+        "text": "爬楼梯",
+        "link": "/leetcode/15-dp/0070-climbing-stairs"
+      },
+      {
+        "text": "杨辉三角",
+        "link": "/leetcode/15-dp/0118-pascals-triangle"
+      },
+      {
+        "text": "打家劫舍",
+        "link": "/leetcode/15-dp/0198-house-robber"
+      },
+      {
+        "text": "完全平方数",
+        "link": "/leetcode/15-dp/0279-perfect-squares"
+      },
+      {
+        "text": "零钱兑换",
+        "link": "/leetcode/15-dp/0322-coin-change"
+      },
+      {
+        "text": "单词拆分",
+        "link": "/leetcode/15-dp/0139-word-break"
+      },
+      {
+        "text": "最长递增子序列",
+        "link": "/leetcode/15-dp/0300-longest-increasing-subsequence"
+      },
+      {
+        "text": "乘积最大子数组",
+        "link": "/leetcode/15-dp/0152-maximum-product-subarray"
+      },
+      {
+        "text": "分割等和子集",
+        "link": "/leetcode/15-dp/0416-partition-equal-subset-sum"
+      },
+      {
+        "text": "最长有效括号",
+        "link": "/leetcode/15-dp/0032-longest-valid-parentheses"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/15-dp/review"
+      }
+    ]
+  },
+  {
+    "text": "多维动态规划",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/16-2d-dp/"
+      },
+      {
+        "text": "不同路径",
+        "link": "/leetcode/16-2d-dp/0062-unique-paths"
+      },
+      {
+        "text": "最小路径和",
+        "link": "/leetcode/16-2d-dp/0064-minimum-path-sum"
+      },
+      {
+        "text": "最长回文子串",
+        "link": "/leetcode/16-2d-dp/0005-longest-palindromic-substring"
+      },
+      {
+        "text": "最长公共子序列",
+        "link": "/leetcode/16-2d-dp/1143-longest-common-subsequence"
+      },
+      {
+        "text": "编辑距离",
+        "link": "/leetcode/16-2d-dp/0072-edit-distance"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/16-2d-dp/review"
+      }
+    ]
+  },
+  {
+    "text": "技巧",
+    "items": [
+      {
+        "text": "基础教材",
+        "link": "/leetcode/17-tricks/"
+      },
+      {
+        "text": "只出现一次的数字",
+        "link": "/leetcode/17-tricks/0136-single-number"
+      },
+      {
+        "text": "多数元素",
+        "link": "/leetcode/17-tricks/0169-majority-element"
+      },
+      {
+        "text": "颜色分类",
+        "link": "/leetcode/17-tricks/0075-sort-colors"
+      },
+      {
+        "text": "下一个排列",
+        "link": "/leetcode/17-tricks/0031-next-permutation"
+      },
+      {
+        "text": "寻找重复数",
+        "link": "/leetcode/17-tricks/0287-find-the-duplicate-number"
+      },
+      {
+        "text": "复习与迁移",
+        "link": "/leetcode/17-tricks/review"
+      }
+    ]
+  }
+]
