@@ -358,7 +358,7 @@ result = app.invoke(Command(resume="approve"), config=config)
 - **`interrupt()` 之前的副作用必须幂等**：恢复时节点会从头重跑，之前插过一行数据库再插一次就重复了，要用幂等键/upsert。
 - **两种中断**：静态 `interrupt_before=["sensitive_tool"]`（编译时指定）和动态 `interrupt()`（按 state 触发）。
 
-> 这块和面经 X02#6（用户长期不输入/再次输入时 graph 状态如何变化）、X09#1-4（长任务恢复）直接对应，展开在 [01-Agent Runtime与架构](./01-agent-runtime-architecture) 第 9、11 节。
+> 这块和面经 X02#6（用户长期不输入/再次输入时 graph 状态如何变化）、X09#1-4（长任务恢复）直接对应，展开在 [01-Agent Runtime与架构](./01-agent-runtime-architecture) 第 8、9、12 节。
 
 ---
 
@@ -401,7 +401,7 @@ async for chunk in app.astream(inputs, config, stream_mode="updates"):
 2. **断线重连**：前端断开后，用同一 `thread_id` 先查任务表/`get_state` 补齐「当前到哪个节点」，再续订 SSE；事件要带序号去重（last-event-id）。
 3. **进度事件幂等**：重连后可能重复收到事件，前端按 node 名 + 序号去重。
 
-> 这块的完整状态机（取消、审批等待、任务状态重建）展开在 [01-Agent Runtime与架构](./01-agent-runtime-architecture) 第 11 节，是本仓库「前端偏全栈」定位的差异化重点。
+> 这块的完整状态机（取消、审批等待、任务状态重建）展开在 [01-Agent Runtime与架构](./01-agent-runtime-architecture) 第 6、12 节，是本仓库「前端偏全栈」定位的差异化重点。
 
 ---
 
