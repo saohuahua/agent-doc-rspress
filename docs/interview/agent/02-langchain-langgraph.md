@@ -99,7 +99,11 @@ LangGraph（低层 Agent Runtime / Orchestration）
 
 **权衡**：先看任务需不需要"状态化执行"。标准 Agent 用 LangChain 起步最快；一旦要精确控制分支、断点恢复、人工审批，就应该下沉到 LangGraph；框架的抽象成为阻碍时（非图模型的调度、特殊存储或协议要求），才考虑手写 Runtime。
 
-**面试版回答**：我会把两者讲成分层关系而不是替代关系。LangChain 是高层 Agent 开发框架，把模型、工具、提示词、中间件这些抽象统一起来，当前建 Agent 的标准入口是 `create_agent`；LangGraph 是更低层的状态化编排与运行时，提供 State、Node、Edge、Reducer、Checkpointer、interrupt 这些能力。`create_agent` 造出来的 Agent 底层就跑在 LangGraph 上，所以它不是被取代，而是分工：上层负责开发体验，下层负责执行、持久化和恢复。选型上我一般先用 LangChain 的标准 Agent 起步，需要精确控制状态流、长任务或人工审批时下沉到 LangGraph 显式画图。
+**面试版回答**
+
+> 我会把两者讲成分层关系而不是替代关系。LangChain 是高层 Agent 开发框架，把模型、工具、提示词、中间件这些抽象统一起来，当前建 Agent 的标准入口是 `create_agent`；LangGraph 是更低层的状态化编排与运行时，提供 State、Node、Edge、Reducer、Checkpointer、interrupt 这些能力。
+>
+> `create_agent` 造出来的 Agent 底层就跑在 LangGraph 上，所以它不是被取代，而是分工：上层负责开发体验，下层负责执行、持久化和恢复。选型上我一般先用 LangChain 的标准 Agent 起步，需要精确控制状态流、长任务或人工审批时下沉到 LangGraph 显式画图。
 
 ## 2. LangChain 的 Agent 是怎么跑起来的？
 
@@ -133,7 +137,13 @@ Model：结合工具结果继续决策
 
 **权衡**：用框架的循环省掉大量基础设施代码，但要接受它的执行模型与抽象成本；如果流程本身很短、工具很少、也不要求恢复与审批，直接手写调用可能更直观、更好压测。
 
-**面试版回答**：LangChain 里一个 Agent 跑起来是这么一条链路：先定义工具，工具的描述和参数 Schema 决定模型能不能选对；再用 `bind_tools` 把工具交给模型；然后用 `create_agent` 把模型、工具、提示词组装成标准循环。循环里模型先决策，如果它输出了 `tool_calls`，就说明它想调工具——注意这只是调用意图，真正执行的是运行时里的工具节点，执行完把结果作为 `ToolMessage` 回灌，模型再基于结果决定下一步，直到不再产生工具调用，输出最终 AIMessage。整个过程和 Runtime 篇讲的一次 Run 是同一件事，只是状态、持久化这些能力由框架提供，不用自己造。
+**面试版回答**
+
+> LangChain 里一个 Agent 跑起来是这么一条链路：先定义工具，工具的描述和参数 Schema 决定模型能不能选对；再用 `bind_tools` 把工具交给模型；然后用 `create_agent` 把模型、工具、提示词组装成标准循环。
+>
+> 循环里模型先决策，如果它输出了 `tool_calls`，就说明它想调工具——注意这只是调用意图，真正执行的是运行时里的工具节点，执行完把结果作为 `ToolMessage` 回灌，模型再基于结果决定下一步，直到不再产生工具调用，输出最终 AIMessage。
+>
+> 整个过程和 Runtime 篇讲的一次 Run 是同一件事，只是状态、持久化这些能力由框架提供，不用自己造。
 
 ## 3. Message / AIMessage / ToolMessage 怎么理解？
 
@@ -146,7 +156,11 @@ Model：结合工具结果继续决策
 | `AIMessage` | 模型 | 文本回答，或带 `tool_calls` |
 | `ToolMessage` | 工具执行器 | 携带 `tool_call_id` 和工具执行结果 |
 
-**面试版回答**：「我按角色分四类消息：System 是开发者写死的角色约束，Human 是用户输入，AI 是模型输出、可能带 tool_calls 结构，Tool 是工具执行结果、必须带 tool_call_id 才能和对应的 tool_call 对上号。LangGraph 里存消息用 `add_messages` reducer，它按消息 ID 合并、能正确处理对同一条消息的覆盖更新。」
+**面试版回答**
+
+> 我按角色分四类消息：System 是开发者写死的角色约束，Human 是用户输入，AI 是模型输出、可能带 tool_calls 结构，Tool 是工具执行结果、必须带 tool_call_id 才能和对应的 tool_call 对上号。
+>
+> LangGraph 里存消息用 `add_messages` reducer，它按消息 ID 合并、能正确处理对同一条消息的覆盖更新。
 
 **容易答错**：把 `AIMessage` 只说成「模型说的话」——漏掉 `tool_calls` 才是 Agent 场景的关键，因为循环就是靠「AI 消息里的 tool_calls」驱动的。
 
@@ -195,7 +209,11 @@ LLM（回灌后继续决策）
 
 **权衡**：工具粒度粗（一个工具干很多事）实现简单，但参数校验与权限难做细，模型也更容易填错；粒度细（一个动作一个工具）权限清晰、可审计，但工具数量上升会拉低选择准确率，需要分组、筛选或子 Agent 隔离。
 
-**面试版回答**：`bind_tools` 的作用只是把工具 Schema 交给模型，让模型能输出结构化的调用意图，也就是 `tool_calls`，里面是工具名和参数。真正执行工具的不是模型，而是运行时：先校验参数、再看权限和策略、高风险工具挂起等人工审批、执行时带超时重试和幂等键，最后把结果作为 `ToolMessage` 回灌给模型。所以边界很清楚——模型负责判断该不该调、调哪个、传什么参数；程序负责能不能调、怎么调、失败了怎么办。MCP 也是同一个分工：它标准化工具的连接与发现，权限和执行仍然在 Runtime 或 Host 手里。
+**面试版回答**
+
+> `bind_tools` 的作用只是把工具 Schema 交给模型，让模型能输出结构化的调用意图，也就是 `tool_calls`，里面是工具名和参数。真正执行工具的不是模型，而是运行时：先校验参数、再看权限和策略、高风险工具挂起等人工审批、执行时带超时重试和幂等键，最后把结果作为 `ToolMessage` 回灌给模型。
+>
+> 所以边界很清楚——模型负责判断该不该调、调哪个、传什么参数；程序负责能不能调、怎么调、失败了怎么办。MCP 也是同一个分工：它标准化工具的连接与发现，权限和执行仍然在 Runtime 或 Host 手里。
 
 ## 5. create_agent 做了什么？
 
@@ -231,7 +249,11 @@ result = agent.invoke({"messages": [{"role": "user", "content": "上月华东销
 
 **权衡**：`create_agent` 起步快、约定好、升级路径平滑，但控制力有限；`StateGraph` 控制力强，代价是要自己设计状态、节点与路由；手写 Runtime 控制权最大，但恢复、并发、幂等、可观测都要自己造（见第 13 题）。
 
-**面试版回答**：`create_agent` 是现在 LangChain 建 Agent 的标准入口，它做的事是把模型、工具、提示词和中间件组装成一个标准循环：模型节点决策，如果产生 `tool_calls` 就交给工具节点执行，结果回灌后再回到模型，直到没有工具调用为止。所以它不是"调一次模型加一次工具"，而是把多轮循环、工具路由和停止条件封装起来。它底层用的是 LangGraph 的图与运行时，所以状态持久化、流式输出、中断这些能力可以直接复用。实际选型上我会先用它起步；如果要精细控制分支、并行、子图，就直接用 StateGraph 显式画图，也可以把 create_agent 的结果当成子图嵌到更大的图里。
+**面试版回答**
+
+> `create_agent` 是现在 LangChain 建 Agent 的标准入口，它做的事是把模型、工具、提示词和中间件组装成一个标准循环：模型节点决策，如果产生 `tool_calls` 就交给工具节点执行，结果回灌后再回到模型，直到没有工具调用为止。所以它不是"调一次模型加一次工具"，而是把多轮循环、工具路由和停止条件封装起来。
+>
+> 它底层用的是 LangGraph 的图与运行时，所以状态持久化、流式输出、中断这些能力可以直接复用。实际选型上我会先用它起步；如果要精细控制分支、并行、子图，就直接用 StateGraph 显式画图，也可以把 create_agent 的结果当成子图嵌到更大的图里。
 
 ## 6. LangGraph 为什么需要 State / Node / Edge？
 
@@ -411,7 +433,13 @@ Agent
 
 **权衡**：用 Middleware 统一策略——好处是可组合、可复用、业务逻辑与核心循环解耦；代价是多一层抽象，链路更长、调试更绕。逻辑写得少且只影响一个节点时，直接写在节点里更直观。
 
-**面试版回答**：Middleware 我理解成在 Agent 循环的固定挂点上插横切逻辑。它的动机是：循环里有一堆规则既不属于业务节点，也不能写进提示词——比如 PII 脱敏、内容审核、工具权限、上下文裁剪、模型重试、人工确认、成本统计，这些必须每次稳定执行。LangChain 的 AgentMiddleware 提供了几个挂点：调用开始时的 before_agent，每次模型调用前的 before_model，包住模型调用的 wrap_model_call，包住工具执行的 wrap_tool_call，模型返回后的 after_model，以及结束时的 after_agent。所以它不是日志中间件，而是参与循环、把确定性策略从 Prompt 挪回代码里的机制。它和 Runtime 篇讲的分工是一致的：一致性和治理属于程序，模型负责推理和选择。
+**面试版回答**
+
+> Middleware 我理解成在 Agent 循环的固定挂点上插横切逻辑。它的动机是：循环里有一堆规则既不属于业务节点，也不能写进提示词——比如 PII 脱敏、内容审核、工具权限、上下文裁剪、模型重试、人工确认、成本统计，这些必须每次稳定执行。
+>
+> LangChain 的 AgentMiddleware 提供了几个挂点：调用开始时的 before_agent，每次模型调用前的 before_model，包住模型调用的 wrap_model_call，包住工具执行的 wrap_tool_call，模型返回后的 after_model，以及结束时的 after_agent。
+>
+> 所以它不是日志中间件，而是参与循环、把确定性策略从 Prompt 挪回代码里的机制。它和 Runtime 篇讲的分工是一致的：一致性和治理属于程序，模型负责推理和选择。
 
 ## 11. Multi-Agent 在 LangGraph 里怎么实现？
 
@@ -448,7 +476,13 @@ Agent A   Agent B   Agent C
 
 **权衡**：Supervisor 灵活但多一跳通信与一次路由决策；静态图/流水线确定性强、延迟低，但扩展新角色要改图。子图隔离上下文效果好，代价是父子状态映射和调试复杂度上升。
 
-**面试版回答**：LangGraph 里做 Multi-Agent 我一般用 Supervisor 加路由：主管节点读 State 决定把任务交给哪个子 Agent，用条件边或者 `Command(goto=...)` 表达；每个子 Agent 用 subgraph 封装成独立子图，有自己的 State 和工具，对外看起来还是一个节点、一次状态更新。如果运行时才知道要拆几个子任务，就用 `Send` 做 fan-out，各自带独立状态跑，结果用 reducer 合并回来；跨图交接用 `Command(goto=..., graph=Command.PARENT)`。工程上我会保证三点：子 Agent 之间传结构化消息和结果契约而不是共享完整上下文、共享状态分 namespace 或单一写者、编排器只做拆解路由汇聚。
+**面试版回答**
+
+> LangGraph 里做 Multi-Agent 我一般用 Supervisor 加路由：主管节点读 State 决定把任务交给哪个子 Agent，用条件边或者 `Command(goto=...)` 表达；每个子 Agent 用 subgraph 封装成独立子图，有自己的 State 和工具，对外看起来还是一个节点、一次状态更新。
+>
+> 如果运行时才知道要拆几个子任务，就用 `Send` 做 fan-out，各自带独立状态跑，结果用 reducer 合并回来；跨图交接用 `Command(goto=..., graph=Command.PARENT)`。
+>
+> 工程上我会保证三点：子 Agent 之间传结构化消息和结果契约而不是共享完整上下文、共享状态分 namespace 或单一写者、编排器只做拆解路由汇聚。
 
 ## 12. LangGraph 如何做 Streaming？
 
@@ -477,7 +511,11 @@ async for chunk in app.astream(inputs, config, stream_mode="updates"):
 
 **权衡**：只推 token 实现最省，但用户不知道任务走到哪；只推状态最省 Token（不推正文），但体验差；生产上通常两者都推，代价是事件数量与前端状态管理复杂度上升。
 
-**面试版回答**：LangGraph 的流式我会分两层讲。第一层是 token streaming，在节点内部对模型做 `astream`，把增量文本推给前端，负责正文的打字机效果；第二层是 state / update streaming，用 `stream_mode="updates"` 拿到每个节点完成后的状态增量，用来推"执行到哪一步"的进度。这两层不是一回事，不能混着用。后端一般把 update 事件转成 SSE 推给前端，同时把 token 事件单独走一路；前端断线重连时，先用同一个 thread_id 查一下当前状态补齐进度再续订，而不是依赖内存里的进度。至于事件幂等和重连细节，那属于前后端架构和 Runtime 的问题，Runtime 篇讲得更细。
+**面试版回答**
+
+> LangGraph 的流式我会分两层讲。第一层是 token streaming，在节点内部对模型做 `astream`，把增量文本推给前端，负责正文的打字机效果；第二层是 state / update streaming，用 `stream_mode="updates"` 拿到每个节点完成后的状态增量，用来推"执行到哪一步"的进度。
+>
+> 这两层不是一回事，不能混着用。后端一般把 update 事件转成 SSE 推给前端，同时把 token 事件单独走一路；前端断线重连时，先用同一个 thread_id 查一下当前状态补齐进度再续订，而不是依赖内存里的进度。至于事件幂等和重连细节，那属于前后端架构和 Runtime 的问题，Runtime 篇讲得更细。
 
 ## 13. LangChain / LangGraph / 手写 Runtime 怎么选？
 
@@ -505,7 +543,11 @@ async for chunk in app.astream(inputs, config, stream_mode="updates"):
 
 **权衡**：框架省的是基础设施与约定成本，付出的是抽象与升级依赖；自研省的是框架约束，付出的是长期维护与正确性风险。业务核心链路上，我倾向"框架承担通用能力、自研只做框架确实覆盖不了的部分"。
 
-**面试版回答**：我的选型顺序是先用 LangChain 的 `create_agent` 起步，因为标准循环、工具路由、停止条件它都替你做好了；一旦需要精确控制状态流、并行分支、子图，或者需要长任务恢复、人工审批，就下沉到 LangGraph 显式画图，用 State、Reducer、Checkpointer、interrupt 这些原语自己组织；只有当框架的抽象真的挡住需求——比如非图模型的调度、要接自己的存储协议、或者对性能与可观测有特殊要求——才考虑手写 Runtime。因为手写意味着恢复、并发、幂等、审计都要自己造，成本比看起来高得多。所以我的原则是：框架承担通用能力，自研只补它覆盖不了的部分。
+**面试版回答**
+
+> 我的选型顺序是先用 LangChain 的 `create_agent` 起步，因为标准循环、工具路由、停止条件它都替你做好了；一旦需要精确控制状态流、并行分支、子图，或者需要长任务恢复、人工审批，就下沉到 LangGraph 显式画图，用 State、Reducer、Checkpointer、interrupt 这些原语自己组织；只有当框架的抽象真的挡住需求——比如非图模型的调度、要接自己的存储协议、或者对性能与可观测有特殊要求——才考虑手写 Runtime。
+>
+> 因为手写意味着恢复、并发、幂等、审计都要自己造，成本比看起来高得多。所以我的原则是：框架承担通用能力，自研只补它覆盖不了的部分。
 
 ## 附录 A：LCEL / Runnable（基础机制）
 
