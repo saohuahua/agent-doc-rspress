@@ -91,9 +91,18 @@ const KNOWN_SKIP = new Set([
   "面经/2026-09-前端AI合并面经速报.md",
 ]);
 
-/** curated 文件：脚本不覆盖、不删除（Javascript.md 的三篇拆分稿、整理后的 vue.md） */
+/** curated 文件：脚本不覆盖、不删除（Javascript.md 的三篇拆分稿、整理后的 vue.md、站点侧新增的 Agent 评估） */
 const CURATED = {
   frontend: ["js-basics.md", "js-core.md", "js-browser.md", "vue.md"],
+  agent: ["07-agent-evaluation.md"],
+};
+
+/**
+ * 站点侧新增稿（源仓库没有对应文件）在侧栏中的位置：
+ * key 为 section.dest，value 是 { slug: 插在哪个 slug 之前 }；没配就追加到末尾。
+ */
+const CURATED_POSITION = {
+  agent: { "07-agent-evaluation": "2026-autumn-agent-interview-collection" },
 };
 
 /**
@@ -109,6 +118,7 @@ const TITLES = {
   "03-skills": "Skill 机制",
   "05-rag": "RAG 面经",
   "06-mcp": "MCP 面经",
+  "07-agent-evaluation": "Agent 评估",
   "2026-autumn-agent-interview-collection": "2026 秋招 Agent 面经合集",
   // 前端面经
   "js-basics": "JavaScript 语言基础",
@@ -278,6 +288,17 @@ function buildSidebar() {
         const link = `/interview/${section.dest}/${slug.replace(/\.md$/, "")}`;
         return { text: titleOf(section, slug.replace(/\.md$/, "")), link };
       });
+      // 站点侧新增稿：源仓库没有对应文件，但侧栏里要有入口
+      for (const name of CURATED[section.dest] || []) {
+        const slug = name.replace(/\.md$/, "");
+        const link = `/interview/${section.dest}/${slug}`;
+        if (items.some((it) => it.link === link)) continue;
+        const entry = { text: titleOf(section, slug), link };
+        const before = CURATED_POSITION[section.dest]?.[slug];
+        const at = before ? items.findIndex((it) => it.link === `/interview/${section.dest}/${before}`) : -1;
+        if (at >= 0) items.splice(at, 0, entry);
+        else items.push(entry);
+      }
       sidebar.push({ text: section.group, items });
     }
   }

@@ -11,6 +11,7 @@
 - [Skill 机制](./agent/03-skills)
 - [RAG 面经](./agent/05-rag)
 - [MCP 面经](./agent/06-mcp)
+- [Agent 评估](./agent/07-agent-evaluation)
 - [2026 秋招 Agent 面经合集](./agent/2026-autumn-agent-interview-collection)
 
 ## 🌐 前端面经
@@ -77,4 +78,5 @@
 
 - 源文档在 `interview` 仓库中维护，本目录由 `npm run sync:interview` 同步生成，**不会改动源文件**。
 - JavaScript 三篇为站点侧整理稿（源文件 `面经/Javascript.md` 不再直接同步），侧栏与页面标题为整理后的干净标题。
+- `agent/07-agent-evaluation.md`（Agent 评估）同为站点侧新增稿，源仓库没有对应文件，已在 `sync-interview.mjs` 里登记为 curated，同步时不会被删除。
 - 研究、调研、计划类文档（如 AI 面经调研、面试题补充计划等）不属于面经本身，不进入站点。
