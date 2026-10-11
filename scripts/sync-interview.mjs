@@ -91,10 +91,10 @@ const KNOWN_SKIP = new Set([
   "面经/2026-09-前端AI合并面经速报.md",
 ]);
 
-/** curated 文件：脚本不覆盖、不删除（Javascript.md 的三篇拆分稿、整理后的 vue.md、站点侧新增的 Agent 评估） */
+/** curated 文件：脚本不覆盖、不删除（Javascript.md 的三篇拆分稿、整理后的 vue.md、站点侧新增的 Agent 专题） */
 const CURATED = {
   frontend: ["js-basics.md", "js-core.md", "js-browser.md", "vue.md"],
-  agent: ["07-agent-evaluation.md"],
+  agent: ["07-agent-evaluation.md", "08-ai-coding-and-code-quality.md", "09-prompt-intent-model-engineering.md"],
 };
 
 /**
@@ -102,7 +102,11 @@ const CURATED = {
  * key 为 section.dest，value 是 { slug: 插在哪个 slug 之前 }；没配就追加到末尾。
  */
 const CURATED_POSITION = {
-  agent: { "07-agent-evaluation": "2026-autumn-agent-interview-collection" },
+  agent: {
+    "07-agent-evaluation": "2026-autumn-agent-interview-collection",
+    "08-ai-coding-and-code-quality": "2026-autumn-agent-interview-collection",
+    "09-prompt-intent-model-engineering": "2026-autumn-agent-interview-collection",
+  },
 };
 
 /**
@@ -119,6 +123,8 @@ const TITLES = {
   "05-rag": "RAG 面经",
   "06-mcp": "MCP 面经",
   "07-agent-evaluation": "Agent 评估",
+  "08-ai-coding-and-code-quality": "AI Coding 与代码质量",
+  "09-prompt-intent-model-engineering": "Prompt 与模型调用工程",
   "2026-autumn-agent-interview-collection": "2026 秋招 Agent 面经合集",
   // 前端面经
   "js-basics": "JavaScript 语言基础",
