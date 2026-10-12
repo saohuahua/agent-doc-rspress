@@ -8,7 +8,7 @@ title: Vue
 >
 > 姊妹篇：[Nuxt](./nuxt)
 
-整体知识链（也是本文的复习顺序）：
+整体知识链：
 
 **响应式数据变化 → 依赖收集与触发 → 调度与批量更新 → render 函数与 VNode → Diff 与 patch → 组件更新 → 状态管理与业务应用 → 性能优化。**
 
@@ -16,16 +16,18 @@ title: Vue
 
 ## 一、Vue 基础与 Vue2 / Vue3 核心区别
 
-### Vue 的基本特点
+### 你如何理解 Vue？它有哪些核心特点？
 
 - **渐进式**：可以只用一个 `<script>` 引入做局部增强，也可以配合路由、状态管理、构建工具做成完整框架。
 - **声明式渲染**：用模板或渲染函数描述 UI「应该长什么样」，框架负责把它变成真实 DOM。
-- **响应式**：数据变化自动驱动视图更新，开发者不需要手动操作 DOM。
+- **响应式**：数据变化自动驱动视图更新，不需要手动操作 DOM。
 - **组件化**：把 UI 拆成可复用的、自带模板/逻辑/样式的单元。
-- **虚拟 DOM**：用 JS 对象描述 UI，配合 Diff 计算最小更新（不是性能的唯一来源，详见第三章）。
+- **虚拟 DOM**：用 JS 对象描述 UI，配合 Diff 尽量复用已有 DOM、减少不必要的更新（不是性能的唯一来源）。
 - **生态完善**：Vue Router、Pinia、VueUse、Nuxt 等配套成熟。
 
-### Vue2 与 Vue3 的核心区别
+> **面试回答：** Vue 是一个渐进式框架，核心是「声明式渲染 + 响应式 + 组件化」：用模板声明 UI，数据变化通过响应式系统自动驱动视图更新，再通过虚拟 DOM 和 Diff 把变化落到真实 DOM。它不强制你一次性采用全部能力，可以从局部增强逐步扩展。
+
+### Vue2 和 Vue3 的主要区别是什么？
 
 | 维度 | Vue2 | Vue3 |
 | --- | --- | --- |
@@ -39,13 +41,13 @@ title: Vue
 | 源码 | JavaScript（Flow 类型） | TypeScript 重写 |
 | 编译优化 | 运行时 diff 为主 | 静态提升、Patch Flags、Block Tree 等编译优化 |
 
-> 一句话：Vue3 最大的区别是**响应式从「劫持属性」变成「代理对象」**；其次是 Composition API 改善逻辑组织，以及编译期信息让运行时更新更精准。但 Vue3 仍然有运行时 Diff，不是「不再 diff」。
+> **面试回答：** 最大的区别是响应式实现从「劫持属性」变成「代理对象」，Vue3 因此能监听新增/删除属性、数组下标和 length、集合类型；其次是 Composition API 改善逻辑组织，以及编译期信息（静态提升、Patch Flags、Block Tree）让运行时更新更精准。但 Vue3 仍然有运行时 Diff，不是「不再 diff」。
 
-### 响应式：Object.defineProperty vs Proxy
+### Vue2 和 Vue3 的响应式原理有什么区别？为什么 Vue3 选择 Proxy？
 
 #### Vue2 的实现与局限
 
-Vue2 初始化时会**递归遍历 `data` 中的每个属性（包括嵌套对象）**，把每个已有属性转成 `getter/setter`：读时收集依赖，写时触发更新。注意它是**深度递归观测**，并不是只能处理第一层。
+Vue2 初始化时会**递归遍历 `data` 中的每个属性（包括嵌套对象）**，把每个已有属性转成 `getter/setter`：读时收集依赖，写时触发更新。它是**深度递归观测**，不是只能处理第一层。
 
 ```javascript
 const data = { count: 0 }
@@ -63,27 +65,27 @@ Object.defineProperty(data, 'count', {
 })
 ```
 
-这个方案的根本限制是：**`defineProperty` 只能劫持「对象上已经存在的属性」**，它是属性级的，不是对象级的。所以：
+根本限制：**`defineProperty` 只能劫持「对象上已经存在的属性」**，它是属性级的，不是对象级的。所以：
 
-- 新增属性 `this.user.age = 18`：`age` 原本不存在，没有对应的 getter/setter，所以不是响应式。需要 `this.$set(this.user, 'age', 18)`。
+- 新增属性 `this.user.age = 18`：`age` 原本不存在，没有对应的 getter/setter，不是响应式，需要 `this.$set(this.user, 'age', 18)`。
 - 删除属性 `delete this.user.age`：同样无法被 setter 捕获，需要 `this.$delete`。
-- 数组索引直接修改 `a[0] = 1` 或修改 `a.length`：也捕获不到。Vue2 通过重写 `push`、`pop`、`splice`、`sort` 等 7 个数组变更方法兜底，但 `a[0] = 1` 这种直接下标赋值仍然无法检测。
+- 数组索引直接修改 `a[0] = 1` 或修改 `a.length`：也捕获不到。Vue2 通过重写 `push`、`pop`、`splice`、`sort` 等数组变更方法兜底，但 `a[0] = 1` 这种直接下标赋值仍无法检测。
 
 所以 Vue2 的短板集中在「新增/删除属性、数组下标和 length」，对已存在属性的读取与修改，响应式能力是完整的。
 
 #### Vue3 的实现
 
-Vue3 用 `Proxy` **代理整个对象**，拦截对象层面的各种操作，因此无论属性是否存在都能被拦截。
+Vue3 用 `Proxy` **代理整个对象**，拦截对象层面的各种操作，无论属性是否存在都能拦截：
 
 ```javascript
 const obj = { count: 0 }
 const proxy = new Proxy(obj, {
   get(target, key, receiver) {
-    // 依赖收集
+    // 读取属性：收集依赖
     return Reflect.get(target, key, receiver)
   },
   set(target, key, value, receiver) {
-    // 新增、修改都能监听到
+    // 新增、修改属性都能监听到
     const result = Reflect.set(target, key, value, receiver)
     // 触发更新
     return result
@@ -93,9 +95,7 @@ const proxy = new Proxy(obj, {
     const result = Reflect.deleteProperty(target, key)
     // 触发更新
     return result
-  },
-  has(target, key) {},      // in 操作符
-  ownKeys(target) {}        // Object.keys / for...in 遍历
+  }
 })
 ```
 
@@ -106,9 +106,11 @@ const proxy = new Proxy(obj, {
 - **对 Map、Set** 这类集合类型也能做响应式支持。
 - 从「监听属性」→「监听对象行为」；从「补丁式处理数组」→「统一拦截机制」。
 
-> 深层对象的懒代理在「响应式原理」一章详细展开，这里只给版本差异结论。
+除 `get`/`set`/`deleteProperty` 外，`Proxy` 还能拦截 `has`（`in` 操作符）、`ownKeys`（`Object.keys` / `for...in` 遍历）等行为，这是 `defineProperty` 做不到的。
 
-### 编译与运行时优化概览
+> **面试回答：** Vue2 用 `Object.defineProperty` 逐个劫持已有属性，因此新增、删除属性、数组下标和 length 都无法监听，只能靠 `$set`/`$delete` 和重写数组方法兜底。Vue3 改用 `Proxy` 代理整个对象，能拦截新增、删除、下标、length、`in`、遍历等操作，并采用懒代理避免初始化时递归遍历。核心是从「监听属性」升级为「监听对象行为」。
+
+### Vue3 做了哪些编译期与运行时优化？
 
 Vue3 的更新优化是**编译期 + 运行期共同作用**的结果，不是简单的「Vue2 全量 diff、Vue3 定点更新」：
 
@@ -117,9 +119,11 @@ Vue3 的更新优化是**编译期 + 运行期共同作用**的结果，不是�
 - **Block Tree**：以「块」为单位收集动态后代节点，更新时跳过静态部分。
 - **事件缓存（cacheHandlers）**：缓存事件处理函数，减少不必要的函数重建与子组件更新。
 
-必须强调：**Vue3 仍然有运行时 Diff**。这些优化的核心是「利用编译期信息，减少运行时不必要的比较与更新工作」，而不是「所有更新都不再经过 Diff」。具体实现见第三章「Vue3 编译优化」。
+Vue3 仍然有运行时 Diff。这些优化的核心是「利用编译期信息，减少运行时不必要的比较与更新」，而不是「所有更新都不再经过 Diff」。具体见第三章「Vue3 在编译阶段做了哪些优化」。
 
-### Options API 与 Composition API 的整体定位
+> **面试回答：** Vue3 在编译期做静态提升、Patch Flags、Block Tree 和事件缓存，运行时据此只更新被标记的动态部分、跳过静态子树；列表乱序仍走 key 映射 + 最长递增子序列的完整 diff。这些优化缩小了 diff 范围，但没有消灭 diff。
+
+### Options API 和 Composition API 有什么区别？
 
 两者是**组织代码的两种方式**，不是二选一的对立：
 
@@ -128,11 +132,13 @@ Vue3 的更新优化是**编译期 + 运行期共同作用**的结果，不是�
 
 Vue3 同时支持两种写法，`<script setup>` 只是 Composition API 的编译期糖。选型与设计原因详见第四章。
 
+> **面试回答：** Options API 按选项拆分代码，同一功能的逻辑会分散在多个选项里，组件复杂后难以维护；Composition API 按业务功能聚合，可抽取 composable 复用，类型推导也更好。二者都可用，Composition API 主要解决「逻辑组织与复用」，不是单纯减少代码行数。
+
 ---
 
 ## 二、响应式系统与更新调度
 
-### Vue3 响应式原理总览
+### Vue3 的响应式原理是什么？数据变化后如何驱动视图更新？
 
 Vue3 响应式的核心是 **`Proxy + track + trigger + effect`**，各部分职责明确：
 
@@ -162,9 +168,11 @@ trigger 找到依赖并（经过 scheduler 调度）通知更新
 diff + patch 更新真实 DOM
 ```
 
-> 注意区分：**响应式系统**只负责「数据变化 → 通知依赖」这一段。后面的调度、render、VNode 比较、patch 属于**渲染更新系统**。两者通过「组件渲染本身也是一个 effect」衔接起来，不要混为一谈。
+响应式系统只负责「数据变化 → 通知依赖」这一段；后面的调度、render、VNode 比较、patch 属于渲染更新系统，两者通过「组件渲染本身也是一个 effect」衔接起来。
 
-### 核心组件与 Reflect
+> **面试回答：** Vue3 用 Proxy 拦截对象操作：读取属性时 track 收集当前 effect 到该属性的依赖集合；数据变化时 trigger 找到这些依赖并交给 scheduler。对组件而言，渲染本身是一个 effect，数据变化会驱动 render 重新执行、生成新 VNode，再经 Diff 和 patch 更新真实 DOM。调度器会把更新批量处理，所以 DOM 不一定立即同步更新。
+
+### Vue3 响应式系统由哪些核心部分组成？Reflect 有什么用？
 
 ```text
 reactive  对象转响应式
@@ -182,9 +190,11 @@ reflect   配合 proxy 完成默认对象操作
 - 通过 `receiver` 让 `this` 指向代理对象本身，避免继承场景下 `this` 指向出错。
 - `Reflect.set` 返回布尔值，正好符合 Proxy `set` 陷阱「返回是否成功」的约定。
 
-### 从一个最小 Demo 理解 track 和 trigger
+> **面试回答：** 核心是 Proxy、track、trigger、effect：Proxy 拦截操作，track 收集依赖，trigger 派发更新，effect 是变化后要重跑的副作用。用 Reflect 而不是直接操作 target，是为了保留默认行为、让 receiver 修正 this 指向，并拿到 Reflect.set 的布尔返回。
 
-> 这是一个**理解「依赖收集与触发」思想的简化示例**：它手动调用 `track()`/`trigger()`，只展示「用 Set 存依赖、变化时统一重跑」的核心思想，并没有实现 Proxy 驱动的自动依赖收集。
+### Vue 是如何完成依赖收集和触发更新的？
+
+> 下面是一个**理解「依赖收集与触发」思想的简化示例**：手动调用 `track()`/`trigger()`，只展示「用 Set 存依赖、变化时统一重跑」的核心思想，并没有实现 Proxy 驱动的自动收集。
 
 普通 JS 变量之间没有联动：
 
@@ -202,7 +212,7 @@ console.log(total) // 还是 20，不会自动变
 let price = 10, quantity = 2, total = 0
 const dep = new Set() // ① 存放副作用函数的集合
 const effect = () => { total = price * quantity }
-const track = () => { dep.add(effect) }     // ② 收集副作用
+const track = () => { dep.add(effect) }        // ② 收集副作用
 const trigger = () => { dep.forEach(fn => fn()) } // ③ 执行所有副作用
 
 track()
@@ -213,12 +223,12 @@ trigger()
 console.log(total) // 40
 ```
 
-问题：这个 demo 的 `track`/`trigger` 是**手动调用的**，`price` 本身没有任何拦截能力。真实 Vue 需要：
+这个 demo 的 `track`/`trigger` 是**手动调用的**，`price` 本身没有任何拦截能力。真实 Vue 需要：
 
-- 为什么需要 Proxy？——因为普通变量读/写无法被拦截，只有代理对象才能在「读属性时自动 track、写属性时自动 trigger」。
-- 于是引出：`get` 里自动调 `track(target, key)`，`set`/`deleteProperty` 里自动调 `trigger(target, key)`。
+- 普通变量读/写无法被拦截，只有代理对象才能在「读属性时自动 track、写属性时自动 trigger」。
+- 因此 `get` 里自动调 `track(target, key)`，`set`/`deleteProperty` 里自动调 `trigger(target, key)`。
 
-支持多个对象时，把单个 `Set` 升级成 `WeakMap → Map → Set`：`targetMap`（对象集合）→ `depsMap`（某对象的属性集合）→ `dep`（某属性的依赖集合）。
+支持多个对象时，把单个 `Set` 升级成 `WeakMap → Map → Set`：
 
 ```text
 targetMap (WeakMap)
@@ -228,13 +238,15 @@ targetMap (WeakMap)
         └── name  → Set [effect3]
 ```
 
-### reactive 的最小教学实现
+> **面试回答：** 依赖收集就是「读取属性时把当前 effect 记进该属性的依赖集合」，触发更新就是「数据变化时从集合里取出 effect 重新执行」。数据结构用 `WeakMap → Map → Set`：WeakMap 的 key 是对象（可被 GC），Map 的 key 是属性名，Set 存 effect（去重）。这套机制本质是发布-订阅。
 
-> 下面是**最小教学版**，只演示「get 收集依赖、set/delete 触发更新、嵌套对象懒代理、代理缓存」这些核心机制。它不是 Vue3 的完整源码实现。
+### reactive 是如何把普通对象变成响应式对象的？
+
+> 下面是**最小实现**，只演示「get 收集依赖、set/delete 触发更新、嵌套对象懒代理、代理缓存」这些核心机制，不是 Vue3 的完整源码。
 
 ```typescript
-const reactiveMap = new WeakMap() // 缓存：同一个原始对象只创建一个代理
-const ITERATE_KEY = Symbol('iterate') // 代表「遍历」这类依赖的虚拟 key
+const reactiveMap = new WeakMap()      // 缓存：同一原始对象只创建一个代理
+const ITERATE_KEY = Symbol('iterate')  // 遍历类依赖的虚拟 key
 
 function reactive(target) {
   // 只代理对象
@@ -245,7 +257,7 @@ function reactive(target) {
   const proxy = new Proxy(target, {
     get(target, key, receiver) {
       const result = Reflect.get(target, key, receiver)
-      track(target, key) // 读取时收集依赖
+      track(target, key) // 读取属性时收集依赖
       // 懒代理：读到对象才继续代理，而不是初始化时全递归
       if (typeof result === 'object' && result !== null) {
         return reactive(result)
@@ -253,12 +265,20 @@ function reactive(target) {
       return result
     },
 
+    // 遍历（Object.keys / for...in）时收集「遍历依赖」，新增/删除属性会触发它
+    ownKeys(target) {
+      track(target, ITERATE_KEY)
+      return Reflect.ownKeys(target)
+    },
+
     set(target, key, value, receiver) {
       const oldValue = target[key]
       const hadKey = Object.prototype.hasOwnProperty.call(target, key)
-      const result = Reflect.set(target, key, value, receiver) // 返回是否成功
+      const result = Reflect.set(target, key, value, receiver)
+      // Reflect.set 失败（如目标属性只读）时不触发更新
+      if (!result) return result
       if (!hadKey) {
-        trigger(target, key, 'ADD') // 新增属性
+        trigger(target, key, 'ADD') // 新增属性，同时触发遍历依赖
       } else if (oldValue !== value) {
         trigger(target, key, 'SET') // 修改已有属性
       }
@@ -269,7 +289,7 @@ function reactive(target) {
       const hadKey = Object.prototype.hasOwnProperty.call(target, key)
       const result = Reflect.deleteProperty(target, key)
       if (hadKey && result) {
-        trigger(target, key, 'DELETE')
+        trigger(target, key, 'DELETE') // 删除属性，同时触发遍历依赖
       }
       return result
     }
@@ -280,17 +300,19 @@ function reactive(target) {
 }
 ```
 
-这段教学代码的**关键点**：
+关键点：
 
-- **嵌套对象缓存**：`reactiveMap` 保证同一个嵌套对象反复读取时返回同一个 Proxy（否则每次 `state.user` 都会生成新代理，破坏身份一致性）。
+- **嵌套对象缓存**：`reactiveMap` 保证同一个嵌套对象反复读取时返回同一个 Proxy（否则每次 `state.user` 都生成新代理，破坏身份一致性）。
 - **懒代理**：只在 `get` 读到对象时才继续 `reactive(result)`，不是初始化时全量递归。
-- **区分新增与修改**：用 `hadKey` 判断，新增属性和删除属性还要额外通知「遍历」依赖（`ITERATE_KEY`）。
-- **`Reflect.set` 的返回值**必须返回，它表示赋值是否成功（例如目标属性是只读时返回 `false`，Proxy 会据此报错）。
+- **区分新增与修改**：用 `hadKey` 判断，新增/删除属性还要通知「遍历」依赖（`ITERATE_KEY`）。
+- **`Reflect.set` 的返回值**必须返回，它表示赋值是否成功；失败时不触发更新。
 - **属性值比较**：只有 `oldValue !== value` 才触发，避免无变化也派发更新。
 
-这段代码**没有实现**的能力（真实源码里有）：`readonly`、`isReactive`/`isProxy`、集合类型（Map/Set 需要专门的 handler）、数组 `length` 与索引的联动、`shallow` 浅层模式、`toRaw` 等。面试中要清楚这是「教学版」，不要宣称它是 Vue3 完整实现。
+这段代码**没有实现**的能力（真实源码里有）：`readonly`、`isReactive`/`isProxy`、集合类型（Map/Set 需要专门的 handler）、数组 `length` 与索引的联动、`shallow` 浅层模式、`toRaw` 等。
 
-### effect 与依赖收集
+> **面试回答：** reactive 用 `new Proxy` 包装对象：get 里 track 收集依赖，读到嵌套对象时懒代理并缓存；set/delete 里区分新增、修改、删除，用 Reflect 完成默认操作并触发 trigger。关键是「懒代理 + 代理缓存」，让深层对象按需转响应式且身份一致。
+
+### effect 是什么？Vue 如何收集和清理依赖？
 
 依赖收集就是：当副作用函数读取某个响应式数据，把它记录到该数据的依赖集合里，数据变化时重新执行它。
 
@@ -302,7 +324,7 @@ effect(() => {
 
 上面的 `effect` 执行时读取 `state.count`，触发 `get`，`track` 把当前 effect 收集进 `state.count` 的依赖集合；`count` 变化时重新执行这个 effect。常见的 effect：组件渲染函数、`watchEffect` 回调、`computed` 的 getter、`watch` 的 source。
 
-朴素写法有个明显 bug：
+朴素写法有 bug：
 
 ```typescript
 let activeEffect = null
@@ -313,14 +335,14 @@ function effect(fn) {
 }
 ```
 
-这种写法第一次执行能收集依赖，但 `trigger` 再次调用 `fn()` 时，`activeEffect` 已经不在正确位置，依赖收集上下文丢失。正确理解需要处理四件事：
+第一次执行能收集依赖，但 `trigger` 再次调用 `fn()` 时，`activeEffect` 已经不在正确位置，依赖收集上下文丢失。正确实现需要处理四件事：
 
 1. **执行时设置当前上下文**：`effect` 执行前把自身设为 `activeEffect`，执行后恢复外层。
-2. **重新执行时重新收集依赖**：每次重跑都要走一遍 `fn()`，重新触发 `get`，重新 `track`。
-3. **清理旧依赖**：重跑前先把自己从旧依赖集合中移除。否则条件分支变化后，已经不再读取的属性仍保留着这个 effect，会造成多余触发甚至内存泄漏。
-4. **嵌套 effect 保存/恢复外层上下文**：用栈（`effectStack`）保存外层 `activeEffect`，内层执行完恢复外层。
+2. **重新执行时重新收集依赖**：每次重跑都走一遍 `fn()`，重新触发 `get`，重新 `track`。
+3. **清理旧依赖**：重跑前先把自己从旧依赖集合移除，否则条件分支变化后已不再读取的属性仍保留这个 effect，造成多余触发甚至内存泄漏。
+4. **嵌套 effect 保存/恢复外层上下文**：用栈保存外层 `activeEffect`，内层执行完恢复外层。
 
-教学版实现：
+实现：
 
 ```typescript
 let activeEffect = null
@@ -348,7 +370,7 @@ function cleanup(effectFn) {
 }
 ```
 
-对应的 `track` 要把「依赖关系」双向记录：
+对应的 `track` 双向记录依赖：
 
 ```typescript
 const targetMap = new WeakMap()
@@ -371,13 +393,13 @@ function track(target, key) {
 }
 ```
 
-要点：
-
 - `WeakMap` 的 key 是原始对象：对象被回收后，它对应的依赖关系也能被 GC，避免内存泄漏。
 - 用 `Set` 存依赖：保证同一个 effect 不被重复收集。
 - `track` 本质是发布-订阅：`track` 订阅，`trigger` 发布通知。
 
-### trigger 与派发更新
+> **面试回答：** effect 是「数据变化后要重跑的副作用」，执行时把自己设为 `activeEffect`，读取到的响应式数据就会把它收集进依赖集合。每次重跑前先清理旧依赖再重新收集，用栈处理嵌套；否则条件分支变化后会残留脏依赖，造成多余触发。
+
+### 数据变化后，Vue 如何找到并触发相关依赖？
 
 `trigger` 根据「怎么变的」找到对应依赖并通知。不同操作触发的依赖不同：
 
@@ -408,16 +430,18 @@ function trigger(target, key, type) {
 
 - **新增/删除属性**会改变「遍历结果」，需要额外通知 `ITERATE_KEY` 依赖。
 - **数组 `length` 与索引联动**：修改 `length` 会影响索引大于等于新长度的元素；改某个索引又可能影响 `length`，依赖映射更复杂。
-- **对象遍历**（`Object.keys`/`for...in`）依赖的是「键的集合」而非某个具体 key，所以需要 `ITERATE_KEY` 这类虚拟 key 单独收集。
+- **对象遍历**（`Object.keys`/`for...in`）依赖的是「键的集合」而非某个具体 key，需要 `ITERATE_KEY` 这类虚拟 key 单独收集。
 
-还要明确一点：**`trigger` 通知依赖后，不代表每个组件立即同步更新 DOM**。真实 Vue 里组件渲染 effect 带有 `scheduler`，`trigger` 只是把任务交给 scheduler，scheduler 会把任务放进更新队列、去重、批量刷新（见下文「异步批量更新与 nextTick」）。
+`trigger` 通知依赖后，**不代表每个组件立即同步更新 DOM**。组件渲染 effect 带 `scheduler`，`trigger` 只是把任务交给 scheduler，scheduler 把任务放进更新队列、去重、批量刷新（见「Vue 为什么采用异步批量更新？nextTick 是什么？」）。
 
-### ref 的实现
+> **面试回答：** trigger 根据 key 和操作类型找依赖：改属性取该 key 的 Set；新增/删除还要额外通知 ITERATE_KEY 遍历依赖。找到后不是同步执行，而是交给 scheduler 决定时机，scheduler 会入队、去重、批量刷新。数组 length 与索引的联动、遍历依赖让依赖关系比「一个 key 一个 Set」更复杂。
+
+### ref 为什么需要 .value？它是如何实现的？
 
 `reactive` 用 Proxy 只能代理对象，**基本类型（number/string/boolean）不是对象，无法被 Proxy 代理**。`ref` 的解法是把值包成一个带 `.value` 的对象，在 `.value` 的 getter/setter 里做依赖收集与触发：
 
 ```typescript
-// 教学版，省略深层对象转换
+// 简化实现，省略深层对象转换
 function ref(value) {
   const wrapper = {
     get value() {
@@ -435,14 +459,14 @@ function ref(value) {
 }
 ```
 
-要点：
+- `.value` 提供了**可追踪的读写入口**：基本类型自身没有可拦截的读写行为，包装对象让读写都走 getter/setter，从而可被 track/trigger。
+- **ref 存对象时仍具备深层响应式**：真实实现里 `ref(object)` 内部会调用 `reactive(object)` 转成深层响应式，所以 `ref({ a: { b: 1 } }).value.a.b` 也是响应式的。
+- **JS 与模板访问的区别**：JS 里必须写 `ref.value`；模板里 Vue 自动解包，直接写 `{{ count }}`。`reactive` 对象里嵌套的 `ref` 属性在模板/读取时也会自动解包（数组和 Map 集合里的 ref 不解包）。
+- 上面的简单包装对象是**简化实现**，不是完整 ref（真实实现还处理对象深层代理、只读、比较、`__v_isRef` 标记等）。
 
-- `.value` 提供了一个**可追踪的读写入口**：基本类型自身没有可拦截的读写行为，包装对象让读写都走 getter/setter，从而可被 track/trigger。
-- **ref 存对象时仍具备深层响应式**：真实实现里，`ref(object)` 内部会调用 `reactive(object)` 把对象转成深层响应式，所以 `ref({ a: { b: 1 } }).value.a.b` 也是响应式的。
-- **JS 与模板访问的区别**：JS 里必须写 `ref.value`；模板里 Vue 会自动解包，直接写 `{{ count }}`。`reactive` 对象里嵌套的 `ref` 属性在模板/读取时也会自动解包（数组和 Map 集合里的 ref 不解包，需注意）。
-- 上面的简单包装对象是**教学实现**，不是完整 ref 实现（真实实现还处理对象深层代理、只读、比较、`__v_isRef` 标记等）。
+> **面试回答：** 基本类型不能被 Proxy 代理，所以 ref 用一个带 `.value` 的对象包住值，读写都经过 getter/setter，从而可被 track/trigger。对象传给 ref 时内部会转成 reactive，所以仍具备深层响应式。模板里 Vue 会自动解包，JS 里才需要 `.value`。
 
-### computed 的实现
+### computed 为什么有缓存？惰性求值是怎么实现的？
 
 `computed` 也基于 `effect`，核心是**缓存 + 惰性求值 + 脏标记**：
 
@@ -473,16 +497,14 @@ function computed(getter) {
 }
 ```
 
-为什么这样设计：
-
 - **为什么有缓存**：`getter` 依赖不变时，`dirty` 一直为 `false`，多次读取直接返回上次结果，不重复执行 `getter`。
 - **为什么惰性求值**：`effect` 带 `lazy: true`，不在创建时立即执行，只有第一次读取 `.value` 时才求值。
-- **依赖变化如何失效**：依赖变化时 `trigger` 会调用 `effectFn` 的 `scheduler`，`scheduler` 只把 `dirty` 置真，**不立即重算**；下一次读取 `.value` 时才重新计算。
-- **为什么适合纯同步派生**：它只承诺「依赖变化后，读取时返回最新值」，不负责异步、副作用。在 getter 里发请求、写 DOM 会破坏「可预测的派生」语义，且缓存/惰性机制会让副作用行为变得难预料。
+- **依赖变化如何失效**：依赖变化时 `trigger` 调用 `effectFn` 的 `scheduler`，`scheduler` 只把 `dirty` 置真，**不立即重算**；下一次读取 `.value` 时才重新计算。
+- **为什么适合纯同步派生**：它只承诺「依赖变化后，读取时返回最新值」，不负责异步、副作用。在 getter 里发请求、写 DOM 会破坏「可预测的派生」语义。
 
-> 面试口述：computed 是一个「惰性求值 + 缓存」的派生状态。它内部用一个带 `scheduler` 的 effect 包住 getter，依赖变化时只把脏标记置真，等真正读 `.value` 时才重算并缓存；依赖不变就永远走缓存。所以它适合纯同步派生，不适合异步副作用。
+> **面试回答：** computed 是「惰性求值 + 缓存」的派生状态。它内部用一个带 scheduler 的 effect 包住 getter：依赖变化时只把脏标记置真，等真正读 `.value` 时才重算并缓存；依赖不变就永远走缓存。因此它适合纯同步派生，不适合异步副作用。
 
-### watch 与 watchEffect
+### watch 和 watchEffect 有什么区别？分别适合什么场景？
 
 `watch` 显式指定数据源，变化时执行回调；`watchEffect` 自动收集内部读取的依赖：
 
@@ -499,14 +521,12 @@ watchEffect(() => {
 })
 ```
 
-工作机制：
-
-- **监听数据源与回调的关系**：`watch` 的 source 内部会被包装成 effect，读取 source 时收集依赖；依赖变化后，通过 **scheduler** 调度执行回调（而不是直接同步重跑），回调拿到新旧值。
-- **`watch` 默认不立即执行**（可用 `immediate: true`）；`watchEffect` 默认立即执行一次，且不区分新旧值（只有「当前值」）。
+- **监听数据源与回调的关系**：`watch` 的 source 内部会被包装成 effect，读取 source 时收集依赖；依赖变化后通过 **scheduler** 调度执行回调（不是直接同步重跑），回调拿到新旧值。
+- **`watch` 默认不立即执行**（可用 `immediate: true`）；`watchEffect` 默认立即执行一次，且不区分新旧值。
 - **`watch` 可以监听 `ref`、reactive 对象、getter、多个 source 数组**；`watchEffect` 只能自动收集，无法指定。
 - **两者都用于「副作用」**，和 `computed`（派生值）区分开。
 
-**异步请求的竞态与 cleanup**：快速输入搜索词时，旧请求可能比新请求更晚返回，导致旧结果覆盖新结果。解决方式是用 watcher 的 cleanup 在回调失效时取消旧请求：
+**异步请求的竞态与 cleanup**：快速输入搜索词时，旧请求可能比新请求更晚返回，导致旧结果覆盖新结果。用 watcher 的 cleanup 在回调失效时取消旧请求：
 
 ```typescript
 watch(keyword, async (value, _oldValue, onCleanup) => {
@@ -520,22 +540,20 @@ watch(keyword, async (value, _oldValue, onCleanup) => {
 })
 ```
 
-- `onCleanup` 是 `watch` 回调第三个参数；Vue 3.5 起也可用 `onWatcherCleanup`，但都必须在 `await` 之前**同步调用**。
-- `AbortController` + `onCleanup` 的配合：当 `keyword` 再次变化，Vue 会先执行上一次的 cleanup 函数，`abort()` 让旧请求失效，新请求结果才可靠。
-- 也可以用一个「请求序号」判断：回调记下自己的序号，只有最新序号的结果才允许写入 `results`，避免过期结果覆盖。
+- 回调第三个参数 `onCleanup` 用于注册清理逻辑；Vue 3.5 起也可用 `onWatcherCleanup()`，但 `onWatcherCleanup()` 必须在回调的同步阶段（`await` 之前）调用。二者都应在异步操作启动前注册，避免竞态和遗漏。
+- `AbortController` + `onCleanup`：当 `keyword` 再次变化，Vue 先执行上一次的 cleanup，`abort()` 让旧请求失效，新请求结果才可靠。
+- 若请求无法取消，可用「请求序号」判断：只有最新序号的结果才写入，避免过期结果覆盖。
+
+> **面试回答：** watch 显式指定 source 并拿到新旧值，默认不立即执行；watchEffect 自动收集依赖、默认立即执行、不区分新旧值。两者都用于副作用。异步场景要配合 cleanup 或 AbortController 取消旧请求，否则慢请求会覆盖新结果。
 
 ### Vue 为什么采用异步批量更新？nextTick 是什么？
 
 **核心结论**：Vue 在**同一轮同步代码中**多次修改响应式数据时，不会每次都同步更新 DOM，而是把更新任务放进队列，等本轮同步代码执行完后再「批量刷新」，最终只渲染一次。`nextTick` 就是「在下次 DOM 更新完成后」执行回调的钩子。
 
-原因与机制：
-
-1. 组件渲染是一个 effect。修改响应式数据时 `trigger` 会找到这个渲染 effect，但 Vue 给组件渲染 effect 挂了 `scheduler`。
+1. 组件渲染是一个 effect。修改响应式数据时 `trigger` 找到这个渲染 effect，但 Vue 给组件渲染 effect 挂了 `scheduler`。
 2. scheduler 不直接执行渲染，而是把 effect 放进**更新队列**（`queue`），同一 effect 通过 id 去重，只入队一次。
 3. 本轮同步代码结束后，Vue 通过**微任务**（`Promise.then`）刷新队列，统一执行队列里的所有 effect。
 4. 所以同一轮里 `count++` 三次，`trigger` 三次，但组件只重新渲染一次。
-
-执行链路：
 
 ```text
 同步代码修改 count（多次）
@@ -554,8 +572,8 @@ nextTick 的回调在此之后执行
 `nextTick` 的要点：
 
 - `nextTick` 等待的是「**本次数据变更引起的 DOM 更新完成后**」，不是固定延时。
-- 实现上它返回一个 Promise（或接受回调），把回调排进更新队列刷新之后；所以 `await nextTick()` 之后访问 DOM 才是更新后的状态。
-- **不要理解成 `setTimeout` 那样的固定延时**：如果本轮没有数据变更，`nextTick` 很快（微任务级别）就返回。
+- 实现上它返回一个 Promise（或接受回调），把回调排进更新队列刷新之后；`await nextTick()` 之后访问 DOM 才是更新后的状态。
+- 不是 `setTimeout` 那样的固定延时：如果本轮没有数据变更，`nextTick` 很快（微任务级别）就返回。
 
 什么时候用 `nextTick`：
 
@@ -569,9 +587,11 @@ await nextTick()
 console.log(document.querySelector('#count').textContent) // 已是最新值
 ```
 
+> **面试回答：** Vue 用调度器把同一轮同步代码里的多次数据修改合并成一次渲染：trigger 只是把渲染 effect 入队去重，等同步代码结束再通过微任务批量刷新。nextTick 就是在这个刷新之后执行的钩子，用来拿更新后的 DOM；它不是固定延时，而是等待「本次更新完成」。
+
 ### 响应式 API 的选择与常见踩坑
 
-#### watch 与 computed 怎么选
+#### watch 和 computed 有什么区别？如何选择？
 
 | 维度 | computed | watch / watchEffect |
 | --- | --- | --- |
@@ -592,7 +612,9 @@ console.log(document.querySelector('#count').textContent) // 已是最新值
 - `flush: 'post'`：组件更新后执行，回调里可安全访问最新 DOM。
 - `flush: 'sync'`：同步执行，破坏批量更新，慎用。
 
-#### ref 与 reactive 怎么选
+> **面试回答：** computed 是带缓存的惰性派生值，watch/watchEffect 是执行副作用的侦听器。要一个新值用 computed，要「做点什么」（请求、操作 DOM、持久化）用 watch；watch 显式指定 source，watchEffect 自动收集依赖。
+
+#### ref 和 reactive 有什么区别？怎么选？
 
 `ref` 用带 `.value` 的包装对象，基本类型和对象都能用（对象内部会转深层响应式）；`reactive` 直接返回 Proxy，只能代理对象/数组/Map/Set。
 
@@ -610,7 +632,9 @@ const form = reactive({ name: '', departmentId: undefined })
 Object.assign(form, { name: '', departmentId: undefined }) // 正确：原地重置
 ```
 
-#### 常见踩坑
+> **面试回答：** ref 用 `.value` 包装，基本类型和对象都行，可整体替换；reactive 只代理对象，适合原地修改的表单/筛选对象。默认用 ref，字段多且原地改的对象用 reactive；reactive 不能整体重新赋值，重置用 Object.assign。
+
+#### 使用 Vue 响应式 API 有哪些常见踩坑？
 
 - **不要直接解构 `reactive` 对象**：解构拿到的是当时的普通值，后续不随原对象更新。用 `toRefs` 暴露多个字段，`toRef` 取单个字段。
 
@@ -624,11 +648,13 @@ const currentPage = toRef(state, 'page')
 - **`watch` 传对 source**：`watch(() => route.params.id, loadUser)` 精确监听 ID；`watch(form, cb)` 对 reactive 对象隐式深监听，大表单可能造成多余触发。
 - **第三方类实例**（如 `echarts.init` 返回的对象）不适合深度响应式代理，用 `shallowRef` 或 `markRaw` 保存，并在卸载时 `dispose`。
 
+> **面试回答：** 常见坑是解构 reactive 丢响应式（用 toRefs/toRef 解决）、reactive 整体重赋值失效（用 Object.assign）、watch 大对象隐式深监听造成多余触发、第三方实例被深度代理。解决思路是：字段用 toRefs，重置用 Object.assign，第三方实例用 shallowRef/markRaw 并在卸载时释放。
+
 ---
 
 ## 三、模板编译、虚拟 DOM 与 Diff
 
-### 模板如何编译成 render 函数
+### Vue 模板是如何编译成 render 函数的？
 
 Vue 的 SFC 模板会经历「编译」过程，产出 render 函数：
 
@@ -652,13 +678,13 @@ export function render(_ctx, _cache) {
 }
 ```
 
-要点：
-
 - 编译发生在**构建阶段**（SFC 通过 vue-loader / @vitejs/plugin-vue），或运行时用 `compile` 编译字符串模板。
 - 运行时**不是每次更新都重新编译模板**，编译结果被缓存复用；每次更新只是重新执行 render 函数。
 - 编译期能拿到「哪些是静态、哪些是动态」的信息，这是 Vue3 编译优化的基础。
 
-### VNode 与虚拟 DOM
+> **面试回答：** 模板经过 parse 生成 AST、transform 识别指令并做静态分析/打 Patch Flag/静态提升、generate 生成 render 函数，渲染时 render 调用 h/createVNode 生成 VNode。编译发生在构建期并缓存，运行时只重新执行 render。
+
+### VNode 和虚拟 DOM 是什么？二者有什么区别？
 
 **核心结论：VNode 是描述单个节点的 JS 对象，虚拟 DOM 是由 VNode 组成的一整棵虚拟节点树。**
 
@@ -684,8 +710,6 @@ const vnode = {
 }
 ```
 
-VNode 与真实 DOM 的区别：
-
 | 对比项 | VNode | 真实 DOM |
 | --- | --- | --- |
 | 本质 | JS 对象 | 浏览器 DOM 节点 |
@@ -707,7 +731,9 @@ VNode 树（虚拟 DOM）
 真实 DOM
 ```
 
-### 为什么要引入虚拟 DOM
+> **面试回答：** VNode 是描述单个节点（元素、组件、文本、Fragment）的 JS 对象，虚拟 DOM 是 VNode 组成的树。渲染链路是「模板 → 编译 → render 函数 → 执行 → VNode 树 → mount/patch → 真实 DOM」。
+
+### Vue 为什么要引入虚拟 DOM？它一定比手写 DOM 快吗？
 
 不要把虚拟 DOM 简单等同于「比手写 DOM 快」，它不一定比精心手写的 DOM 操作更快。它的价值在于：
 
@@ -717,7 +743,7 @@ VNode 树（虚拟 DOM）
 - **支持按新旧 VNode 差异更新**：复用已有节点，减少不必要的创建/删除/移动。
 - **为跨平台提供抽象基础**：同样的 VNode 可以渲染到 DOM、Canvas、原生（如小程序）等宿主。
 
-另外注意：**不要把所有 DOM 更新都描述成必然触发完整重排重绘**。浏览器渲染流程复杂，具体是否重排/重绘取决于更新内容和优化策略（如合成层、样式是否影响布局等），不应一概而论。
+也不要把所有 DOM 更新都描述成必然触发完整重排重绘。浏览器渲染流程复杂，是否重排/重绘取决于更新内容和优化策略（如合成层、样式是否影响布局等）。
 
 ```mermaid
 flowchart TD
@@ -729,12 +755,14 @@ flowchart TD
   F --> G[更新真实 DOM]
 ```
 
-### mount 与 patch
+> **面试回答：** 虚拟 DOM 的价值不是「一定更快」，而是让开发者用声明式描述 UI、屏蔽 DOM 操作细节、统一更新流程并支持跨平台。数据变化后生成新 VNode，通过 diff 尽量复用已有节点、减少不必要的 DOM 操作。它不一定比手写 DOM 快，具体 DOM 更新是否重排重绘也取决于内容。
+
+### Vue 首次挂载和更新分别经历什么？mount 和 patch 有什么区别？
 
 - **mount（挂载）**：首次渲染时，根据 VNode 创建真实 DOM 并插入页面。
 - **patch（更新）**：更新时，比较新旧 VNode，复用或替换真实 DOM，把差异应用到页面。
 
-patch 的入口判断（伪代码）：
+patch 的入口判断：
 
 ```typescript
 function patch(oldVNode, newVNode) {
@@ -764,14 +792,16 @@ children 的几种情况：
 3. 新 children 为空 → 卸载旧子节点
 ```
 
-### Diff 的核心原则
+> **面试回答：** 首次渲染走 mount，按 VNode 创建真实 DOM；更新走 patch，比较新旧 VNode。patch 先判断 type/key 是否相同：不同就卸载旧节点、挂载新节点；相同就复用 DOM、更新 props、再递归处理 children。
 
-- **同类型、同 key 的节点通常可以复用**：因为节点身份没变，只需更新属性和子节点，不必重建 DOM。
-- **类型或 key 不同则卸载旧节点、创建新节点**：节点身份已经改变，继续复用会带来错误状态（组件状态、DOM 结构都对不上）。
+### Vue 的 Diff 算法遵循哪些核心原则？
+
+- **同类型、同 key 的节点通常可以复用**：节点身份没变，只需更新属性和子节点，不必重建 DOM。
+- **类型或 key 不同则卸载旧节点、创建新节点**：节点身份已经改变，继续复用会带来错误状态。
 - **列表重排与普通节点更新是不同层次的问题**：普通节点 diff 处理「这一个节点变没变」，列表 diff 处理「一批节点的身份映射、复用、移动、增删」。
-- **性能与准确性之间的取舍**：Vue 选择「只比较同层节点」而不是求两棵树的最小编辑距离。全量树 diff 的最优解复杂度高（O(n³) 级别），同层比较 + 启发式策略把复杂度降到接近 O(n)，代价是跨层级移动会被当成「卸载重建」——真实业务里跨层移动很少见，这个取舍是合理的。
+- **性能与准确性之间的取舍**：Vue 选择「只比较同层节点」而不是求两棵树的最小编辑距离。全量树 diff 的最优解复杂度高（O(n³) 级别），同层比较 + 启发式策略把复杂度降到接近 O(n)，代价是跨层级移动会被当成「卸载重建」——真实业务里跨层移动很少见，这个取舍合理。
 
-只比较同层的原因：跨层级比较成本太高，且真实业务中跨层移动不常见，同层比较可以把复杂度降下来。
+只比较同层的原因：跨层级比较成本太高，且真实业务中跨层移动不常见。
 
 ```html
 <!-- 这种跨层变化：卸载旧 div，重新挂载 section -->
@@ -779,7 +809,9 @@ children 的几种情况：
 <section><p>A</p></section>
 ```
 
-### 列表 Diff 与 key
+> **面试回答：** Diff 的核心是「同层比较 + 同类型/key 复用 + 不同类型卸载重建」。它不做跨层的最优编辑距离计算，而是用启发式策略把复杂度降到接近 O(n)；列表节点再用 key 映射身份，与普通节点的属性更新分开处理。
+
+### Vue3 的列表 Diff 是如何工作的？为什么用最长递增子序列？
 
 针对有 key 的子节点 diff，Vue3 的核心流程分两个层次理解。
 
@@ -803,31 +835,37 @@ children 的几种情况：
 8. 从后向前遍历中间新节点：LIS 之外的节点执行移动或新增（从后向前保证锚点正确）
 ```
 
-举例说明 `source` 数组与 LIS：
+`source` 数组与 LIS 的约定：
 
 ```text
 旧中间：B C D E
-新中间：C B E D
+新中间：C B D E
 
 旧节点索引：B=0, C=1, D=2, E=3
-新节点对应的旧索引：C=1, B=0, E=3, D=2
-source = [1, 0, 3, 2]
+source[i] = 新位置 i 的节点在旧列表的索引 + 1（0 表示新增、没有对应旧节点）
+  C → 1+1 = 2
+  B → 0+1 = 1
+  D → 2+1 = 3
+  E → 3+1 = 4
+source = [2, 1, 3, 4]
 ```
 
-`source[i]` 表示「新列表第 i 个节点对应旧列表里的索引」，值为 0 表示该新节点没有对应旧节点（需要新增）。
-
-对这个 `source` 求 LIS：
+对这个 `source` 求**值严格递增**的最长递增子序列，返回的是**下标**：
 
 ```text
-source = [1, 0, 3, 2]
-LIS（下标）= [0, 2] 或 [1, 3]
+source = [2, 1, 3, 4]
+值递增的子序列：
+  [2, 3, 4] → 下标 [0, 2, 3]（对应新节点 C、D、E）
+  [1, 3, 4] → 下标 [1, 2, 3]（对应新节点 B、D、E）
 ```
 
-LIS 里的节点「在新旧列表中的相对顺序是递增的，可以不移动」，其余节点再执行移动或新增。
+- `source[i]` 的值是「旧索引 + 1」，`0` 表示该新节点在旧列表中没有对应，需要挂载。
+- LIS 求的是「值严格递增」的**下标序列**，这些下标对应的新节点在旧列表中的相对顺序是递增的，可以**保持不动**，其余节点再移动或新增。
+- 上例中 `[0, 2, 3]`（C、D、E）保持不动，只有 B 需要移动到 C 之后——与「旧 B C D E → 新 C B D E 只有 B 移动」一致。
 
-> 说明：这里 `source` 的约定是「值 = 旧索引 + 1」（0 表示无对应），所以 LIS 求的是 `source` 中严格递增的**下标序列**。概念版与实现版的变量含义要一致，不要混用「值就是旧索引」的说法。
+> **面试回答：** Vue3 列表 diff 先头尾同步跳过稳定部分，再处理新增/卸载，中间乱序区间用 key 建映射、构建 source（旧索引 + 1，0 表示新增），求 source 的最长递增子序列下标，这些下标对应的节点保持不动，其余从后向前移动/挂载。LIS 的意义是「找出一组相对顺序不变的节点」，从而减少真实 DOM 移动次数。
 
-### 为什么 key 在 Diff 中很重要
+### 为什么列表渲染需要稳定的 key？为什么不推荐用 index？
 
 key 是**节点或组件身份的标识**，diff 靠它判断「新列表的某个节点是否是旧列表里的同一个节点」。
 
@@ -858,12 +896,14 @@ index: 0 1 2 3
 item:  D A B C
 ```
 
-边界与注意点：
+边界：
 
-- **不能绝对地说「所有用 index 的列表都错」**：当列表是静态的、不增删不重排、且节点没有内部状态（输入框、动画、组件实例）时，用 index 通常不会出错。但一旦列表会插入/删除/排序，index 就可能引发错误复用。
-- **key 改变可能导致组件实例重建**：diff 判断「同类型 + 同 key」才复用组件实例；key 变了，旧实例被卸载、新实例被创建，组件内部 state、DOM 状态都会重置。
+- **不能绝对地说「所有用 index 的列表都错」**：列表静态、不增删不重排、且节点没有内部状态（输入框、动画、组件实例）时，用 index 通常不会出错。但列表会插入/删除/排序时，index 就可能引发错误复用。
+- **key 改变可能导致组件实例重建**：diff 判断「同类型 + 同 key」才复用组件实例；key 变了，旧实例被卸载、新实例被创建，内部 state、DOM 状态都会重置。
 
-### Vue3 编译优化
+> **面试回答：** key 是节点身份标识，diff 靠它判断新旧列表的对应关系；没有 key 只能就地复用，插入/删除时会错位（输入框内容错乱等）。index 会随插入/排序变化，不是稳定身份，所以动态列表要用业务 id。key 变了会导致组件实例重建、状态重置。
+
+### Vue3 在编译阶段做了哪些优化？
 
 这些优化是「编译期生成信息 + 运行期使用信息」，目标是让更新更有针对性，**不意味着 Vue3 不再需要 VNode 和 Diff**：
 
@@ -878,9 +918,11 @@ item:  D A B C
 
 `isActive` 变化时，因为节点带 CLASS 的 Patch Flag，运行期只更新 class，不会重新比较整个节点。
 
-**再次强调**：这些优化让「整棵树的递归 diff」变成「优先处理已标记的动态部分」，但列表乱序等场景仍然要走 key 映射 + LIS 的完整 diff；编译优化没有消灭 diff，而是缩小了 diff 的范围。
+这些优化让「整棵树的递归 diff」变成「优先处理已标记的动态部分」，但列表乱序等场景仍要走 key 映射 + LIS 的完整 diff；编译优化缩小了 diff 范围，没有消灭 diff。
 
-### 总结（分三层记忆）
+> **面试回答：** 编译期做四件事：静态提升（静态 VNode 复用）、Patch Flags（标记动态部分）、Block Tree（收集动态后代、跳过静态子树）、事件缓存。运行时据此只更新被标记的动态节点，缩小 diff 范围，但列表乱序仍需完整 diff。
+
+### Diff 小结
 
 ```text
 第一层 基础原则：patch 判断节点类型/key，同类型复用、不同类型卸载重建；只比较同层。
@@ -905,13 +947,13 @@ export default {
 }
 ```
 
-当「计数」和「搜索」两个功能混在同一个组件里时，上面这种写法会让它们互相交织，难以定位。
+当「计数」和「搜索」两个功能混在同一个组件里时，这种写法会让它们互相交织，难以定位。
 
 Composition API 把**同一功能的状态、逻辑、生命周期聚在一起**，并按业务功能组织：
 
 ```vue
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 
 const count = ref(0)
 const doubleCount = computed(() => count.value * 2)
@@ -931,7 +973,9 @@ const increment = () => { count.value++ }
 - **不是所有组件都必须用同一套组织方式**：简单组件用 Options API 也很清晰。
 - 真正要解决的是「逻辑分散、难以复用」的问题，而不是为用而用。
 
-### 组合式函数 composable
+> **面试回答：** Options API 按选项拆分，同一功能的逻辑会散落在 data/computed/methods/生命周期里，组件复杂后难以维护和复用。Composition API 按业务功能聚合，可抽成 composable 复用，TS 类型推导也更好。它的价值是逻辑组织和复用，不是减少行数；Options API 仍然可用。
+
+### 什么是 composable？它如何实现逻辑复用？
 
 composable 是把一组相关状态和行为封装成的**普通函数**，不需要组件实例：
 
@@ -957,15 +1001,15 @@ const { message } = useMessage()
 </template>
 ```
 
-面试追问要点：
+关键细节：
 
 - **composable 与组件的关系**：composable 是「可复用的、带响应式状态和生命周期依赖的逻辑单元」；组件调用它后，其状态和钩子就「挂载」到当前组件实例上。所以 `onMounted` 等钩子要在组件上下文中同步调用。
-- **多次调用时状态不一定共享**：每次调用 `useMessage()` 都会新建一套 `ref` 和钩子，**默认不共享状态**。要在多个组件间共享，需要把状态提升到模块级单例或放进 store。
+- **多次调用时状态不一定共享**：每次调用 `useMessage()` 都会新建一套 `ref` 和钩子，**默认不共享状态**。要跨组件共享，需把状态提升到模块级单例或放进 store。
 - **为什么 composable 不天然等于单例**：它只是普通函数，函数内部的 `ref` 是每次调用新建的局部变量。只有把 `ref` 定义在模块作用域，才变成全局共享。
-- **生命周期、watcher 要在正确的组件上下文中同步调用**：`onMounted`、`watchEffect` 等依赖「当前活跃组件实例」，如果把它们放到 `setTimeout`、`Promise.then` 等异步回调里调用，会脱离组件上下文，导致钩子不生效或挂到错误实例上。
+- **生命周期、watcher 要在正确的组件上下文中同步调用**：`onMounted`、`watchEffect` 等依赖「当前活跃组件实例」，放到 `setTimeout`、`Promise.then` 等异步回调里会脱离组件上下文，导致钩子不生效或挂到错误实例。
 - **资源清理**：请求取消（AbortController）、事件监听（`addEventListener`）、定时器，都要在 `onBeforeUnmount`（或 `watchEffect` 的 cleanup）里清理。
 
-真实业务例子：
+业务例子：
 
 ```typescript
 // usePagination.ts
@@ -978,26 +1022,38 @@ export function usePagination() {
   return { page, pageSize, total, reset }
 }
 
-// useSearch.ts：处理请求取消，避免竞态
+// useSearch.ts：取消旧请求，只接受最新结果
+import { ref, watch, onBeforeUnmount } from 'vue'
+
 export function useSearch<T>(fetcher: (keyword: string, signal: AbortSignal) => Promise<T[]>) {
   const keyword = ref('')
   const results = ref<T[]>([])
   let controller: AbortController | null = null
 
   watch(keyword, async (value) => {
-    controller?.abort()
-    controller = new AbortController()
-    results.value = await fetcher(value, controller.signal)
+    controller?.abort()                 // 取消上一次请求
+    controller = new AbortController()  // 为本次请求创建取消信号
+    try {
+      results.value = await fetcher(value, controller.signal)
+    } catch (err) {
+      // 已取消的请求（AbortError）直接忽略，不写入结果
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      throw err
+    }
   })
 
-  onBeforeUnmount(() => controller?.abort())
+  onBeforeUnmount(() => controller?.abort()) // 卸载时取消进行中的请求
   return { keyword, results }
 }
 ```
 
-### 逻辑复用与 mixin 的差异
+上面的取消逻辑依赖 `fetcher` 正确把 `signal` 传给请求；若 fetcher 不支持取消，则改用「请求序号」：只有最新序号的结果才写入，避免过期结果覆盖。
 
-Composition API 借鉴函数式编程思想，用「函数封装 + 显式返回值」复用逻辑，和 mixin 相比：
+> **面试回答：** composable 是把一组响应式状态和生命周期逻辑封装成的普通函数，组件调用后这些状态和钩子挂到当前实例上。每次调用默认新建一套状态，不共享；要共享就提升到模块级或 store。内部的钩子和 watcher 必须在组件上下文同步调用，资源要在卸载时清理。
+
+### Composition API 与 mixin 有什么区别？
+
+Composition API 用「函数封装 + 显式返回值」复用逻辑，和 mixin 相比：
 
 | 维度 | mixin | composable |
 | --- | --- | --- |
@@ -1006,13 +1062,15 @@ Composition API 借鉴函数式编程思想，用「函数封装 + 显式返回�
 | 类型推导 | 差，隐式注入难以推导 | 好，普通函数天然可推导 |
 | 组织方式 | 生命周期/数据分散 | 按功能聚合 |
 
-普通函数封装、逻辑组合、显式返回值、避免命名冲突，是 composable 相比 mixin 的核心优势。`setup` 本身也可以看作「一次函数式组织逻辑」的入口，`<script setup>` 是其编译期糖。
+普通函数封装、逻辑组合、显式返回值、避免命名冲突，是 composable 相比 mixin 的核心优势。`setup` 本身可以看作「一次函数式组织逻辑」的入口，`<script setup>` 是其编译期糖。
+
+> **面试回答：** mixin 隐式合并属性，来源难追溯、同名会冲突、类型推导差；composable 是普通函数，显式引入和返回值、作用域独立、类型可推导。这是 Composition API 相比 mixin 在复用上的核心优势。
 
 ---
 
 ## 五、组件设计与组件通信
 
-### 对组件的理解
+### 你如何理解 Vue 组件？如何设计可复用的组件？
 
 组件是 Vue 应用的基础构建块，把模板、逻辑、样式封装成独立、可复用的单元。除「封装 + 复用」外，更值得关注**组件设计边界**：
 
@@ -1021,7 +1079,9 @@ Composition API 借鉴函数式编程思想，用「函数封装 + 显式返回�
 - **基础展示组件不应无条件绑定某个业务 store 或接口**：否则换个页面复用就得把 store 和接口一起带过去。例如 `UserTable` 不应内部请求 `/api/users`，应由页面取数据后把 `rows`、`loading` 传进来，通过 `page-change`、`sort-change` 把用户意图抛出去。
 - **让组件更易复用、测试、维护**：输入输出明确、无隐式依赖、单一职责的组件，单测和复用都更简单。
 
-### 组件通信方式与选型
+> **面试回答：** 组件是把模板、逻辑、样式封装成的可复用单元。设计上要定义清晰的 props（输入）、emit（输出）、slot（定制）边界，区分容器组件和展示组件；基础展示组件不直接绑定业务 store 或接口，只接收 props 发事件，这样才容易复用和测试。
+
+### Vue 组件之间有哪些通信方式？如何选择？
 
 先判断**状态归属**，再决定传递方式。
 
@@ -1095,15 +1155,15 @@ defineExpose({ focus: () => input.value?.focus() })
 </script>
 ```
 
-> 面试口述：先判断状态归属。父组件的数据用 props 下发，子组件用 emit 表达意图，保证数据来源唯一、更新路径可追踪。深层局部上下文用 provide/inject；跨页面状态放 Pinia；ref 暴露只用于 focus、reset 这类命令式能力；事件总线只处理临时通知，不保存核心状态。
+> **面试回答：** 先判断状态归属：父子的用 props + emit；深层局部上下文用 provide/inject；跨页面状态放 Pinia；ref 只暴露 focus、reset 这类命令式能力；事件总线只处理临时通知。核心是保证数据来源唯一、更新路径可追踪，不为省事无差别上全局 store。
 
-### 单向数据流
+### 什么是单向数据流？为什么子组件不能直接修改 props？
 
 Vue 的单向数据流是 `父组件 state → props → 子组件 view`。子组件不能直接改 prop，因为 prop 的真实所有者在父组件，子组件直接改即使暂时生效，也会在父组件下次重渲染时被覆盖。Vue 对直接修改 prop 会警告。
 
 **为什么要有单一来源与可追踪更新路径**：数据只有一个可信来源，更新都通过明确的 emit 走回拥有者，才容易追踪「谁在什么时候改了什么」。
 
-边界情况（易被忽略）：
+边界情况：
 
 - **props 的只读保护并不等于嵌套对象不可修改**：`props.user.name = 'x'` 这类对嵌套成员的修改 Vue 通常不报错（只警告顶层赋值），它会直接改到父组件的对象上，破坏单向数据流。真正需要修改时应 emit 一个新的值或深拷贝。
 - **直接修改共享对象的嵌套成员可能影响父组件**：因为 props 传的是引用。
@@ -1117,7 +1177,7 @@ const emit = defineEmits<{ save: [name: string] }>()
 
 const draftName = ref(props.initialName) // 本地草稿
 watch(() => props.initialName, value => {
-  draftName.value = value // 业务策略：prop 变化时同步草稿（是否要这样做由业务决定）
+  draftName.value = value // 业务策略：prop 变化时同步草稿（是否覆盖由业务决定）
 })
 </script>
 
@@ -1127,7 +1187,9 @@ watch(() => props.initialName, value => {
 </template>
 ```
 
-### v-model 的原理与演进
+> **面试回答：** 单向数据流让状态只有父组件一个来源，更新通过 emit 走回拥有者，路径可追踪。子组件直接改 prop 会被父组件重渲染覆盖，还破坏可预测性。要注意 props 传引用时嵌套成员仍可被改到父对象，需要修改时应 emit 新值，编辑草稿则复制本地状态。
+
+### v-model 的实现原理是什么？Vue2 和 Vue3 有什么区别？
 
 `v-model` 不是魔法双向绑定，是「值通过 prop 或 DOM 属性向下传，变化通过事件向上通知」的语法糖。原生文本输入框可理解为：
 
@@ -1176,7 +1238,9 @@ const email = defineModel<string>('email', { required: true })
 
 修饰符（简要）：`.trim` 去首尾空格、`.number` 转数字、`.lazy` 改为 `change` 时同步。
 
-### 插槽与作用域插槽
+> **面试回答：** v-model 是「prop 向下 + 事件向上」的语法糖，没有违反单向数据流。Vue2 用 value + input（.sync 实现多值），Vue3 统一为 modelValue + update:modelValue 并支持多具名绑定，3.4 起可用 defineModel。子组件始终 emit 更新事件，由父组件决定是否更新。
+
+### 什么是插槽和作用域插槽？作用域插槽如何传递数据？
 
 - **默认插槽 / 具名插槽**：让父组件往子组件的指定位置插入内容。
 - **作用域插槽**：子组件把自身数据通过插槽 props 暴露给父组件，父组件用 `v-slot` 接收并渲染，实现「父组件决定结构、子组件提供数据」。
@@ -1202,11 +1266,13 @@ defineProps<{ items: { id: number; name: string }[] }>()
 </List>
 ```
 
-原理层面：插槽本质是**函数**——具名插槽编译成 `slots` 对象，作用域插槽的「插槽 props」就是调用这个插槽函数时传入的参数。`<slot :item="item">` 编译后相当于调用 `slots.default({ item })`。
+原理：插槽本质是**函数**——具名插槽编译成 `slots` 对象，作用域插槽的「插槽 props」就是调用这个插槽函数时传入的参数。`<slot :item="item">` 编译后相当于调用 `slots.default({ item })`。
 
 使用场景：表格自定义列、表单自定义控件渲染、列表项自定义内容等「结构由父组件决定、数据在子组件」的场景。
 
-### 组件更新的触发条件
+> **面试回答：** 插槽让父组件向子组件指定位置插入内容；作用域插槽让子组件把自身数据通过插槽 props 传给父组件，父组件用 v-slot 接收后决定怎么渲染。插槽本质是函数，作用域插槽 props 就是调用该函数时传的参数，适合「父组件定结构、子组件供数据」的场景。
+
+### Vue 组件何时会重新渲染？父组件更新子组件一定更新吗？
 
 组件重新渲染（其渲染 effect 重新执行）的根本条件：**组件渲染时读取过的响应式数据发生了变化**。
 
@@ -1215,19 +1281,39 @@ defineProps<{ items: { id: number; name: string }[] }>()
 - `props` 变化会触发子组件更新（因为 props 是响应式的，且子组件渲染读到了它）；但 **Vue 对 props 更新有优化**：若子组件的 props 都是稳定值（未被父组件动态修改），或配合 `v-memo` 等条件，子组件可能跳过重渲染。
 - **父组件更新时子组件不必然更新**：只有当子组件接收的 props 或自身依赖变化时才会更新；父组件重渲染本身不会无条件重渲染所有后代。不过要区分：无状态优化依赖编译期 Patch Flags（动态 props 才标记），若父组件每次都传新的对象/数组字面量，子组件仍会重新更新。
 
-### 模板引用与 defineExpose
+> **面试回答：** 组件重新渲染的条件是「它渲染时读到的响应式数据变了」。父组件更新不会无条件触发所有子组件更新，只有子组件接收的 props 或自身依赖变化才更新；编译期 Patch Flags 会让「props 稳定」的子组件跳过重渲染，但父组件每次传新对象字面量仍会触发子组件更新。
+
+### 模板引用和 defineExpose 有什么作用？父组件如何调用子组件方法？
 
 - `ref` 模板引用用于拿到子组件实例或 DOM 元素，暴露命令式能力。
 - `<script setup>` 默认封闭，`defineExpose` 显式声明可被父组件访问的成员。
 - 只暴露 `focus`、`reset`、`submit` 这类明确动作，不要暴露内部状态让父组件随意改，否则破坏单向数据流。
 
+```vue
+<!-- SearchInput.vue -->
+<script setup lang="ts">
+const input = ref<HTMLInputElement>()
+defineExpose({ focus: () => input.value?.focus() })
+</script>
+
+<!-- Parent.vue -->
+<script setup lang="ts">
+import { ref } from 'vue'
+import SearchInput from './SearchInput.vue'
+const inputRef = ref<InstanceType<typeof SearchInput>>()
+const focus = () => inputRef.value?.focus()
+</script>
+```
+
+> **面试回答：** 模板 ref 拿到子组件实例或 DOM 元素；`<script setup>` 默认不暴露内部成员，子组件用 defineExpose 声明要暴露的命令式方法（如 focus、reset）。父组件通过 ref 调用这些方法，但只应暴露明确动作，不暴露内部状态。
+
 ---
 
 ## 六、生命周期、内置组件与指令
 
-### Vue3 生命周期时间线
+### Vue3 组件有哪些生命周期？各阶段适合做什么？
 
-生命周期钩子不是孤立列表，而是一条时间线：
+生命周期钩子是一条时间线：
 
 ```text
 setup 阶段（组件初始化，同步执行）
@@ -1247,15 +1333,15 @@ onUnmounted（已卸载）
 （KeepAlive 下）onDeactivated（失活进入缓存）/ onActivated（重新激活）
 ```
 
-要点：
-
-- **`setup` 不是生命周期钩子**，它是 Composition API 的入口（Options API 里的 `beforeCreate`/`created` 阶段的替代），在其中定义响应式数据、computed、watch，或调用 composable。它同步执行，且此时**组件实例还没挂载**。
+- **`setup` 不是生命周期钩子**，它是 Composition API 的入口（替代 Options API 的 `beforeCreate`/`created` 阶段），在其中定义响应式数据、computed、watch，或调用 composable。它同步执行，此时组件实例还没挂载。
 - **各阶段用途**：`onMounted` 适合请求接口、访问 DOM、初始化图表/地图/第三方插件；`onBeforeUpdate` 适合保存旧 DOM 状态（如滚动位置）；`onUpdated` 适合基于最新 DOM 操作，但**不要在 `onUpdated` 里随意修改响应式状态**，否则可能触发无限循环更新。
 - **资源清理放对时机**：定时器、事件监听、请求、第三方实例的销毁放在 `onBeforeUnmount`（卸载前还能访问组件状态和 DOM）。
-- **SSR 环境限制**：服务端渲染只执行 `setup` 阶段，`onMounted`、`onUpdated`、`onUnmounted` 等浏览器相关钩子不会在服务端执行；依赖 `window`/`document` 的副作用要放到这些钩子或 `onBeforeMount` 之后。
-- **钩子与 watcher 对组件上下文的依赖**：`onMounted`、`watchEffect` 等需要在组件实例上下文中同步调用（同 composable 的要求）。
+- **SSR 环境限制**：服务端渲染时 `setup` 及组件初始化逻辑仍会执行，但 `onBeforeMount`、`onMounted`、`onUpdated`、`onUnmounted` 等与浏览器 DOM 相关的钩子不会在服务端执行；依赖 `window`/`document` 的逻辑应放在这些客户端钩子里。
+- **钩子与 watcher 对组件上下文的依赖**：`onMounted`、`watchEffect` 等需要在组件实例上下文中同步调用。
 
-### v-if 与 v-show
+> **面试回答：** 生命周期按「挂载前 → 挂载后 → 更新前 → 更新后 → 卸载前 → 卸载后」的顺序执行。setup 是入口不是钩子；DOM 相关操作放 onMounted；更新前保存旧状态放 onBeforeUpdate；资源清理放 onBeforeUnmount；KeepAlive 用 onActivated/onDeactivated。SSR 下浏览器 DOM 相关钩子不执行。
+
+### v-if 和 v-show 有什么区别？如何选择？
 
 | 维度 | `v-if` | `v-show` |
 | --- | --- | --- |
@@ -1265,12 +1351,12 @@ onUnmounted（已卸载）
 | 生命周期 | 切换触发挂载/卸载钩子 | 切换不触发生命周期 |
 | 适用场景 | 不常切换、条件渲染、需全新状态 | 频繁切换、大内容显示隐藏 |
 
-注意点：
-
 - `v-if` 控制的是「子树是否挂载」，条件变化会创建或卸载组件实例；**不要把 `v-if` 描述成每次切换都重新编译整个模板**——模板编译结果已缓存，切换只是挂载/卸载实例。
 - 选择看「切换频率 + 组件状态 + 生命周期 + 初始成本」：频繁切换用 `v-show`，不常切换或需要每次全新状态用 `v-if`。
 
-### KeepAlive 缓存组件
+> **面试回答：** v-if 条件为假时不挂载子树，切换有创建/卸载成本并触发生命周期；v-show 始终挂载，只用 display 切换，初始成本高但切换成本低。频繁切换用 v-show，不常切换或需要每次全新状态用 v-if。
+
+### KeepAlive 有什么作用？失活和卸载有什么区别？
 
 KeepAlive 缓存动态组件的实例：切换时**不卸载**，进入缓存；再次渲染时从缓存激活，避免重新创建实例。
 
@@ -1294,9 +1380,11 @@ KeepAlive 缓存动态组件的实例：切换时**不卸载**，进入缓存；
 | 状态 | 丢失 | 保留 |
 | 钩子 | `onBeforeUnmount`/`onUnmounted` | `onDeactivated`/`onActivated` |
 
-### Teleport
+> **面试回答：** KeepAlive 缓存组件实例，切换时不卸载、进入缓存，再切回时激活复用，走 onDeactivated/onActivated 而不是卸载钩子。失活是保留实例和状态、只移出 DOM；要在失活时暂停轮询/订阅，激活时恢复。include/exclude 按组件名匹配，max 限制缓存数量。
 
-`Teleport` 把某块 DOM 渲染到指定目标（默认 `body`），**组件逻辑层级不变，只是 DOM 挂载位置改变**。用于弹窗、遮罩、通知这类「在逻辑上属于某组件、但 DOM 上应脱离父容器」的场景，避免被父级 `overflow`、定位、z-index 影响。
+### Teleport 解决什么问题？它会改变组件的逻辑层级吗？
+
+`Teleport` 把某块 DOM 渲染到指定目标位置，**组件逻辑层级不变，只是 DOM 挂载位置改变**。用于弹窗、遮罩、通知这类「在逻辑上属于某组件、但 DOM 上应脱离父容器」的场景，避免被父级 `overflow`、定位、z-index 影响。
 
 ```html
 <Teleport to="body">
@@ -1304,18 +1392,30 @@ KeepAlive 缓存动态组件的实例：切换时**不卸载**，进入缓存；
 </Teleport>
 ```
 
-- `to` 指定目标选择器；`disabled` 可动态禁用。
+- `to` 指定目标选择器或 DOM 节点（必填，没有默认目标）。
 - 逻辑上事件、props、上下文仍属于原组件树，只有 DOM 位置变了。
+- SSR 下需要确保 `to` 指向的目标在 hydration 时已存在，否则客户端和服务端内容不一致。
 
-### Transition
+> **面试回答：** Teleport 用 `to` 把一块 DOM 渲染到指定目标（如 body），解决弹窗被父级 overflow/z-index 裁剪的问题。它只改 DOM 挂载位置，不改变组件的逻辑层级，事件和上下文仍属于原组件。
 
-`Transition` 为元素/组件的进入、离开应用过渡动画：
+### Transition 有什么作用？列表过渡用哪个组件？
 
-- 使用场景：列表增删、元素显示隐藏、路由切换等需要平滑过渡的地方。
+`Transition` 为**单个元素或组件**的进入、离开应用过渡：
+
 - 机制：在元素插入/移除前后，自动添加/移除 CSS 过渡类名（如 `v-enter-from`、`v-enter-active`、`v-enter-to`），或调用 JS 钩子。
 - 它本身不做 CSS，只负责**在正确的时机挂/摘类名或调用钩子**，动画细节由 CSS 或 JS 完成。
 
-### 自定义指令
+**列表项目的增删、移动过渡用 `TransitionGroup`**，它会给列表项应用过渡并处理移动动画：
+
+```html
+<TransitionGroup name="list" tag="ul">
+  <li v-for="item in items" :key="item.id">{{ item.name }}</li>
+</TransitionGroup>
+```
+
+> **面试回答：** Transition 处理单元素/组件的进入离开过渡，通过在正确时机挂摘类名或调用 JS 钩子工作；列表的增删、移动过渡用 TransitionGroup。两者本身不做动画，只负责时机，动画由 CSS/JS 完成。
+
+### 什么时候用自定义指令？它与组件、composable 有什么区别？
 
 `v-focus`、`v-permission` 这类自定义指令用于「需要直接操作 DOM 的命令式逻辑」。适用边界：
 
@@ -1323,26 +1423,39 @@ KeepAlive 缓存动态组件的实例：切换时**不卸载**，进入缓存；
 - **不适合替代组件**：复杂结构、模板、样式、逻辑复用应交给组件。
 - **不适合替代 composable**：涉及响应式状态、可复用逻辑应写成 composable；指令里维护状态容易产生隐式耦合。
 
-### v-if 与 v-for
+> **面试回答：** 自定义指令只适合「直接操作 DOM 的命令式逻辑」，如聚焦、权限显隐、点击外部关闭。复杂结构用组件，涉及响应式状态和可复用逻辑用 composable，不要把指令当成组件或 composable 的替代。
 
-**同一元素上同时用 `v-if` 和 `v-for` 时，`v-for` 优先级更高**，`v-if` 会在每次循环时重复求值，语义混乱且浪费性能。更合理写法：
+### Vue3 中可以在同一元素同时用 v-if 和 v-for 吗？
+
+**Vue3 中二者用于同一元素时，`v-if` 优先级高于 `v-for`**，因此 `v-if` 无法访问 `v-for` 的循环变量（这是与 Vue2 的差异：Vue2 里 `v-for` 优先级更高）。
+
+```vue
+<!-- 错误：Vue3 中 v-if 拿不到 item，会报错或得不到预期结果 -->
+<li v-for="item in items" v-if="item.active" :key="item.id">{{ item.name }}</li>
+```
+
+更合理的写法：
 
 - 要「过滤列表」，用 `computed` 先过滤再 `v-for`。
 - 要「整体条件渲染列表」，把 `v-if` 放到外层容器或 `<template>` 上。
 
 ```vue
-<!-- 错误：v-if 和 v-for 同元素 -->
-<li v-for="item in items" v-if="item.active" :key="item.id">{{ item.name }}</li>
-
 <!-- 推荐：computed 过滤 -->
 <li v-for="item in activeItems" :key="item.id">{{ item.name }}</li>
+
+<!-- 推荐：整体条件渲染放到外层 -->
+<template v-if="items.length">
+  <li v-for="item in items" :key="item.id">{{ item.name }}</li>
+</template>
 ```
+
+> **面试回答：** Vue3 中 v-if 优先级高于 v-for，所以 v-if 拿不到循环变量，二者不要放同一元素。过滤列表用 computed 提前算好再 v-for；整体控制渲染把 v-if 放外层 template 或容器上。
 
 ---
 
 ## 七、状态管理与路由
 
-### Vuex 与 Pinia
+### Vuex 和 Pinia 有什么区别？如何选择？
 
 Vuex（Options 风格）：
 
@@ -1386,17 +1499,30 @@ export const useCounterStore = defineStore('counter', () => {
 
 - **Vuex 的 state/getters/mutations/actions 职责**：`state` 存数据，`getters` 派生（类似 computed），`mutations` 同步改 state，`actions` 处理异步并提交 mutation。
 - **为什么 Vuex 用 mutation 管同步变更、异步放 action**：强制所有状态变更都走 `mutation`，配合 DevTools 记录每一次同步变更，便于调试和时间旅行；异步逻辑放在 action 里，最终仍通过 commit 落到 mutation。
-- **为什么 Pinia 不再强制 mutations**：Vue3 的响应式系统让「直接改 state」也能被可靠追踪，且 DevTools 同样能记录，mutation 的「唯一入口」约束不再必要，去掉后模板代码更少。
+- **为什么 Pinia 不再强制 mutations**：Vue3 的响应式系统让「直接改 state」也能被可靠追踪，DevTools 同样能记录，mutation 的「唯一入口」约束不再必要，去掉后模板代码更少。
 - **Pinia 的 action 如何组织业务逻辑**：action 就是普通函数，同步异步皆可，直接改 state；可以写 `loadUsers`、`login` 这类有业务语义的方法。
 - **天然多 store + 无 namespace**：Vuex 是一个根 store 加 modules（复杂时处理 namespace）；Pinia 是多个独立 store，各自 `defineStore` + `useXxxStore` 引入。
 
-### storeToRefs 与状态边界
+> **面试回答：** Vuex 有 state/getters/mutations/actions，改 state 必须 commit mutation，异步放 action，模块化要处理 namespace，写法偏重；Pinia 去掉 mutations，action 直接改 state，天然多 store、无 namespace，TS 和 Composition API 体验更好。Vue3 新项目默认选 Pinia。
 
-- **从 store 解构会破坏响应式**：直接 `const { count } = store` 拿到的是当时的值（非响应式）。用 `storeToRefs(store)` 保留响应式关联；**action 不要用 `storeToRefs` 解构**，直接用 `store.xxx()` 调用，因为 action 解构后内部 `this` 可能丢失绑定。
+### 为什么直接解构 store 会丢响应式？storeToRefs 有什么用？
+
+- **解构 state 会破坏响应式**：直接 `const { count } = store` 拿到的是当时的值（非响应式）。用 `storeToRefs(store)` 把 state/getter 转成 ref，保留响应式关联。
+- **action 可以直接从 store 解构**：Pinia 的 action 已绑定到 store，`const { increment } = store` 后调用 `increment()` 不会丢失 `this`。`storeToRefs()` 只提取 state 和 getter，**不含 action**，所以不应该用 storeToRefs 处理 action。
 - **哪些状态进 store、哪些留组件/composable**：跨页面、跨模块共享且需要单一来源的（登录用户、权限、购物车、全局筛选）进 store；组件私有 UI 状态、表单草稿、局部交互状态留组件或 composable。
 - **不要把所有业务状态无差别塞进全局 store**：全局状态越多，耦合和追踪成本越高，也容易产生「谁都能改」的混乱。原则是「先局部，确实需要跨模块共享再提升」。
 
-### Hash 与 History 模式
+```typescript
+import { storeToRefs } from 'pinia'
+const store = useCounterStore()
+
+const { count, doubleCount } = storeToRefs(store) // state/getter 保持响应式
+const { increment } = store                        // action 直接解构即可
+```
+
+> **面试回答：** 直接解构 store 的 state 会拿到非响应式的普通值，用 storeToRefs 把 state 和 getter 转成 ref 保持响应式；action 已绑定 store，可以直接解构调用，storeToRefs 不包含 action。状态只把「跨模块共享且需要单一来源」的放进 store，局部状态留在组件或 composable。
+
+### Vue Router 的 hash 和 history 模式有什么区别？
 
 | 维度 | Hash | History |
 | --- | --- | --- |
@@ -1422,7 +1548,9 @@ location / {
 - **前端路由为何能切换页面却不做完整文档导航**：切换时前端拦截路由变化，用组件渲染替换内容，不请求新 HTML 文档，所以不会整页刷新。
 - **SPA 路由与 SSR 不是同一概念**：SPA 是「客户端渲染 + 前端路由」的架构，SSR 是「服务端渲染出 HTML」，两者可以组合（SSR 应用同样用前端路由）。
 
-### 路由权限控制
+> **面试回答：** hash 模式把路径放 # 后，不发给服务器，刷新无需配置，用 hashchange 监听；history 模式用 pushState 改地址，URL 更干净但刷新会真实请求路径，需要服务端回退到 index.html，用 popstate 监听前进后退。pushState 本身不触发 popstate。
+
+### 路由权限应该怎么设计？为什么还需要后端鉴权？
 
 路由守卫不应只写成「没有 token 就跳登录」，至少要区分：未登录、已登录但权限未加载、无权限、登录页回跳、接口 token 失效。
 
@@ -1457,13 +1585,15 @@ router.beforeEach(async to => {
 - **无权访问**：跳 403 或降级页面，而不是静默跳登录。
 - **前后端权限边界**：前端路由守卫只是「用户体验 + 前端访问流程」的一部分，用于隐藏无权限菜单、避免无效跳转；**真正的接口权限和数据访问控制必须由后端校验**，不能只靠前端隐藏页面或检查 token。
 
-> 路由组件用动态 `import()` 分包；动态参数从 `/users/1` 切到 `/users/2` 时，同一组件实例通常复用，依赖参数重新请求数据要 `watch(() => route.params.id)` 或组件内守卫，不能只依赖 `onMounted`。
+路由组件用动态 `import()` 分包；动态参数从 `/users/1` 切到 `/users/2` 时，同一组件实例通常复用，依赖参数重新请求数据要 `watch(() => route.params.id)` 或组件内守卫，不能只依赖 `onMounted`。
+
+> **面试回答：** 路由守卫要区分未登录（跳登录带回跳）、权限未加载（先加载再 replace）、无权限（跳 403）、刷新恢复（重建路由表）几种情况，动态路由要防重复注册和导航循环。前端守卫只改善体验，接口和数据权限必须由后端校验，前端隐藏页面不能作为安全边界。
 
 ---
 
 ## 八、性能优化与实际场景
 
-### SPA 与 MPA
+### SPA 和 MPA 有什么区别？各自有哪些优缺点？
 
 SPA 通过前端路由和组件渲染动态重写当前页面，避免整页跳转；MPA 每个页面是独立 HTML，切换时整页刷新。
 
@@ -1485,7 +1615,9 @@ SPA 通过前端路由和组件渲染动态重写当前页面，避免整页跳�
 
 SPA 的典型代价：首屏加载慢、SEO 需要额外方案、复杂应用 JS 内存占用上升。
 
-### 首屏性能排查与优化
+> **面试回答：** SPA 是单页 + 前端路由，局部刷新、状态易共享，但首屏慢、SEO 需额外方案；MPA 是多页整页刷新，首屏和 SEO 更直接，但导航要重载资源。选择看应用形态：重交互的后台/工具用 SPA，内容站点或强 SEO 场景考虑 MPA 或 SSR。
+
+### SPA 首屏加载慢应该如何排查和优化？
 
 先定位，再优化，不要把手段清单无差别套用。
 
@@ -1512,7 +1644,7 @@ const observer = new IntersectionObserver(entries => {
   entries.forEach(entry => {
     if (entry.isIntersecting) {
       const img = entry.target
-      img.src = img.dataset.src // 关键：把真实地址赋给 src 才会发起加载
+      img.src = img.dataset.src // 把真实地址赋给 src 才会发起加载
       observer.unobserve(img)
     }
   })
@@ -1520,7 +1652,9 @@ const observer = new IntersectionObserver(entries => {
 document.querySelectorAll('img[data-src]').forEach(img => observer.observe(img))
 ```
 
-### Vue3 组件更新优化（运行时）
+> **面试回答：** 先用 Performance/Network 定位瓶颈是 JS 体积、接口、图片还是渲染，再对症：JS 大就路由懒加载、代码拆分、按需引入；接口慢就并行和缓存；图片大就压缩、懒加载；确实需要 SEO 或极致首屏再评估 SSR/预渲染，而不是无脑套手段清单。
+
+### Vue3 组件更新慢应该如何排查和优化？
 
 本题与「首屏优化」分开：首屏关注**首次加载与关键渲染路径**，本题关注**运行时更新、重渲染、大列表与响应式开销**。
 
@@ -1546,7 +1680,9 @@ onBeforeUnmount(() => chart.value?.dispose())
 
 **核心原则：先确认瓶颈，再选优化；不要为了用优化 API 到处加复杂度。**
 
-### 大列表与虚拟列表
+> **面试回答：** 先用 Vue Devtools 定位是哪些组件频繁重渲染，再判断是更新、加载还是资源问题。大列表虚拟化、列表用稳定 key、第三方实例用 shallowRef 避免深层代理、大组件分包、按需用 v-once/v-memo；关键是先定位再优化，不要为了「优化」到处加复杂度。
+
+### 为什么大列表需要虚拟列表？核心原理是什么？
 
 大量数据（几千上万行）渲染成真实 DOM 会带来巨大成本，diff 也救不了。虚拟列表的思路是**只渲染视口附近可见的若干项**，用上下 padding 撑起总高度，滚动时动态替换可见项：
 
@@ -1554,11 +1690,13 @@ onBeforeUnmount(() => chart.value?.dispose())
 - 可用成熟库（如 vue-virtual-scroller、vueuc 等），配合稳定 key 和 `v-memo`。
 - 若每条内容复杂、高度不定，需要动态测量行高，实现成本更高。
 
-### SSR 与客户端渲染的取舍
+> **面试回答：** 大列表渲染成真实 DOM 的创建和更新成本太高，虚拟列表只渲染视口附近的可见项，用 padding 撑起总高度，滚动时动态替换，把 DOM 数量从「全部数据」降到「可见数量」。适合数据多、结构相似、行高相对稳定的场景。
+
+### 什么情况下应该选 SSR？SSR 和 CSR 有什么区别？
 
 | 维度 | 客户端渲染（CSR/SPA） | 服务端渲染（SSR） |
 | --- | --- | --- |
-| 首屏 | 慢（要下载 JS 再渲染） | 快（服务端直接返回 HTML） |
+| 首屏 | 通常较慢（要下载 JS 再渲染） | 通常较快（服务端直接返回 HTML） |
 | SEO | 需额外方案 | 好 |
 | 服务器压力 | 低（静态托管即可） | 高（服务端渲染 + hydration） |
 | 复杂度 | 低 | 高（服务端环境、数据、hydration） |
@@ -1566,14 +1704,15 @@ onBeforeUnmount(() => chart.value?.dispose())
 
 - 需要 SEO 或强首屏时考虑 SSR/SSG/预渲染；纯后台、强交互、内网应用通常 CSR 足够。
 - Nuxt 是 Vue 的 SSR 框架，兼顾了前端路由与服务端渲染。
+- SSR 首屏「更快」是相对 CSR 通常而言，也受服务端渲染耗时、网络、缓存影响，不是无条件成立。
+
+> **面试回答：** SSR 在服务端渲染 HTML，首屏和 SEO 通常更好，但服务器压力、复杂度更高，且 hydration 前无交互；CSR 部署简单、交互全在客户端，但首屏和 SEO 弱。需要 SEO 或强首屏选 SSR/SSG，后台/重交互/内网应用 CSR 足够。
 
 ---
 
 ## 附录：架构与扩展概念
 
-### MVVM、MVC、MVP
-
-> 本章是扩展概念，回答概念题够用即可，不占用核心复习篇幅。
+### MVVM、MVC 和 MVP 有什么区别？为什么 Vue 常被从 MVVM 角度理解？
 
 | 模式 | Model | View | 中间层 | 交互方式 |
 | --- | --- | --- | --- | --- |
@@ -1582,7 +1721,7 @@ onBeforeUnmount(() => chart.value?.dispose())
 | MVVM | 数据模型 | 视图 | ViewModel（视图模型） | 数据绑定，View 与 ViewModel 自动同步 |
 
 - **MVVM 核心是数据绑定**：ViewModel 连接 View 与 Model，通过绑定实现自动同步。Vue 通过响应式系统和虚拟 DOM 实现了这一机制。
-- **为什么 Vue 常被从 MVVM 角度理解**：Vue 实例可看作 ViewModel——`data`（Model）经响应式系统与模板/渲染函数（View）自动双向同步，开发者不需要手动操作 DOM。
+- **为什么 Vue 常被从 MVVM 角度理解**：Vue 实例可看作 ViewModel——`data`（Model）经响应式系统与模板/渲染函数（View）自动同步，开发者不需要手动操作 DOM。
 - **不要断言 Vue 每个内部部分都严格符合 MVVM 规范**：Vue 的响应式、虚拟 DOM、模板编译是组合起来「近似 MVVM」的工程实现，并非照搬教科书 MVVM。特别是「双向绑定」只是 `v-model` 的语法糖，底层仍是单向数据流 + 事件。
 
 Vue 里的对应关系（Vue2 示例，仅为说明 MVVM 概念）：
@@ -1595,9 +1734,11 @@ const vm = new Vue({
 })
 ```
 
-### 最小 SPA 示例
+> **面试回答：** 三者区别在中间层和交互方式：MVC 的 Controller 处理输入并可能让 View 直接接触 Model；MVP 的 Presenter 让 View 与 Model 完全解耦；MVVM 靠 ViewModel 的数据绑定自动同步。Vue 的响应式让 data 和视图自动同步，所以常被理解为 MVVM，但它是工程上的近似，不是严格照搬。
 
-> 这是用于理解「URL 变化 → 路由匹配 → 内容切换」的**最小教学示例**，不是 Vue Router 的完整实现。
+### 如何手写一个最小的 SPA？它与 Vue Router 有什么区别？
+
+> 这是理解「URL 变化 → 路由匹配 → 内容切换」的**最小示例**，不是 Vue Router 的完整实现。
 
 ```javascript
 const appDiv = document.getElementById('app')
@@ -1619,15 +1760,15 @@ renderContent() // 首次渲染
 window.addEventListener('hashchange', renderContent) // 路由切换
 ```
 
-注意点：
-
 - **首次渲染与路由切换**：加载时先 `renderContent()`，之后靠 `hashchange` 响应切换。
 - **默认路由与 404**：空 hash 落到 `/home`，未知路径落到 `/404`。
-- **XSS 风险与安全边界**：示例直接 `innerHTML = contentFn()`。这里内容是**硬编码的静态模板**，所以安全；一旦路由内容或参数来自用户输入、URL query 或接口返回，就必须避免拼进 `innerHTML`，改用 DOM API（如 `textContent`）或做转义，否则有 XSS 风险。
+- **XSS 风险**：示例直接 `innerHTML = contentFn()`。这里内容是**硬编码的静态模板**，所以安全；一旦内容来自用户输入、URL query 或接口返回，就必须避免拼进 `innerHTML`，改用 `textContent` 或做转义。
 - 真实 Vue Router 还包括路由表匹配、嵌套路由、导航守卫、`pushState` 与历史管理等，本示例只展示最小闭环。
+
+> **面试回答：** 最小 SPA 就是「用 hash 存路径，hashchange 时按路由表匹配、渲染对应内容，空路径和未知路径分别兜底到首页和 404」。它只演示了 URL→内容切换的最小闭环，Vue Router 还处理嵌套路由、导航守卫、history 模式等，不能混为一谈。
 
 ### 其他低优先级扩展题
 
 - **Vue 如何实现组件之间的事件总线**：早期用 `new Vue()` 作为事件中心 `$on/$emit/$off`；Vue3 移除了实例事件 API，改用 `mitt`。事件总线适合临时通知，需统一注册与销毁，不应承载核心业务状态。
 - **Vue 的 nextTick 与微任务**：`nextTick` 基于 Promise 微任务（兼容环境回退到 `MutationObserver`/`setTimeout`），等待当前数据变更引发的 DOM 更新完成。
-- **Vue 与 React 的异同**：都是组件化 + 虚拟 DOM + 声明式；差异在于响应式实现（Proxy 依赖收集 vs 不可变数据 + 调度）、模板语法 vs JSX、更新粒度（组件级 vs 细粒度/组件级）等，属于横向对比题。
+- **Vue 与 React 的异同**：都是组件化 + 虚拟 DOM + 声明式；差异在于响应式实现（Proxy 依赖收集 vs 不可变数据 + 调度）、模板语法 vs JSX、更新粒度等，属于横向对比题。
