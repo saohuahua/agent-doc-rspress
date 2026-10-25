@@ -110,6 +110,24 @@ const CURATED_POSITION = {
 };
 
 /**
+ * 站点侧 curated 项目分组（源仓库没有对应目录，脚本既不生成也不删除）。
+ * 只负责在 _sidebar.json 里登记入口，页面本身手工维护。
+ * 位置：排在「总览」之后、SECTIONS 生成的分组之前。
+ */
+const PROJECT_GROUPS = [
+  {
+    group: "项目面经",
+    items: [
+      { slug: "index", title: "pi-web-vue 项目面经" },
+      { slug: "01-execution-and-streaming", title: "执行链路与流式传输" },
+      { slug: "02-state-and-session-recovery", title: "状态管理与会话恢复" },
+      { slug: "03-scenario-questions", title: "综合场景题" },
+    ],
+    dest: "pi-web-vue",
+  },
+];
+
+/**
  * 侧栏与页面标题（slug -> 干净标题）。
  * 同步时用于重写站点副本的一级标题（源文件不动），侧栏条目也取自这里。
  */
@@ -278,6 +296,15 @@ function buildSidebar() {
   const sidebar = [
     { text: "总览", items: [{ text: "面经速查", link: "/interview/" }] },
   ];
+
+  // 站点侧 curated 项目分组：排在总览之后、同步生成的分组之前
+  for (const group of PROJECT_GROUPS) {
+    const items = group.items.map(({ slug, title }) => ({
+      text: title,
+      link: slug === "index" ? `/interview/${group.dest}/` : `/interview/${group.dest}/${slug}`,
+    }));
+    sidebar.push({ text: group.group, items });
+  }
 
   for (const section of SECTIONS) {
     if (section.dest === "frontend") {

@@ -1,6 +1,17 @@
 # 面经速查
 
-> 面试八股速查手册：**Agent 面经 → 前端面经 → 手撕代码** 三个分区，前端部分按技术主题分组。面试前按主题过一遍即可。
+> 面试八股速查手册：**项目面经 → Agent 面经 → 前端面经 → 手撕代码** 四个分区，前端部分按技术主题分组。面试前按主题过一遍即可。
+
+## 📦 项目面经
+
+### pi-web-vue
+
+> 以简历三条 bullet 为主线的项目面经：执行链路与流式传输、状态管理与会话恢复、综合场景题。所有结论都能落到源码，代码证明不了的标「静态推导」或「待核实」。
+
+- [pi-web-vue 项目面经（导读）](./pi-web-vue/)
+- [01 执行链路与流式传输](./pi-web-vue/01-execution-and-streaming)
+- [02 状态管理与会话恢复](./pi-web-vue/02-state-and-session-recovery)
+- [03 综合场景题](./pi-web-vue/03-scenario-questions)
 
 ## 🤖 Agent 面经
 
@@ -82,3 +93,4 @@
 - JavaScript 三篇为站点侧整理稿（源文件 `面经/Javascript.md` 不再直接同步），侧栏与页面标题为整理后的干净标题。
 - `agent/07-agent-evaluation.md`（Agent 评估）、`agent/08-ai-coding-and-code-quality.md`（AI Coding 与代码质量）、`agent/09-prompt-intent-model-engineering.md`（Prompt 与模型调用工程）同为站点侧新增稿，源仓库没有对应文件，已在 `sync-interview.mjs` 里登记为 curated，同步时不会被删除。
 - 研究、调研、计划类文档（如 AI 面经调研、面试题补充计划等）不属于面经本身，不进入站点。
+- `pi-web-vue/` 是独立的项目面经分组（导读 + 三篇），源文档在 `pi-web-vue` 仓库的 `docs/interview/pi-web-vue/`，手工迁移维护；`sync-interview.mjs` 里以 `PROJECT_GROUPS` 登记侧栏入口，同步时既不生成也不删除该目录。

@@ -1,0 +1,158 @@
+# pi-web-vue 项目面经
+
+以简历三条 bullet 为主线，按真实面试题组织。所有结论都能落到源码；代码证明不了的标「待核实」或「静态推导」。
+
+源码链接固定到 commit [`27d6bee`](https://github.com/saohuahua/pi-web-vue/tree/27d6bee5878878aedf9a296b5e5e43236b56c22e)。SDK 为 `@earendil-works/pi-coding-agent@0.85.1`。
+
+---
+
+## 一、三篇各解决什么
+
+| 文档 | 题目 | 内容 |
+| --- | --- | --- |
+| [01 执行链路与流式传输](./01-execution-and-streaming) | Q1–Q11 | 项目定位、完整调用链、为什么服务端执行、SDK 与移植边界、两个完成时点、实例并发管理、事件裁剪、SSE 三个语义、连接管理、三种「结束」的区别、完整环节 |
+| [02 状态管理与会话恢复](./02-state-and-session-recovery) | Q12–Q21 | reducer 与索引边界、工具结果配对、分层展示、刷新恢复什么、三层判据、队列版本、上下文压缩、两种 Token 口径、服务端重启 |
+| [03 综合场景题](./03-scenario-questions) | **项目专项 A–F** + **通用场景 G–K** + **综合架构 L–N** | 前三部分：本项目真实实现、可迁移的通用 Agent 场景、整体设计判断。共 14 道，未实现的部分标注为扩展设计 |
+
+**优先级**：P0 是简历直接写出的能力和必须独立讲清的核心实现；P1 是常见深入追问和边界分析；P2 是加分项。
+
+**三类场景题的区别**：
+
+- **项目专项（A–F）**回答「我的项目怎么做的、边界在哪」，必须能对着源码讲。
+- **通用场景（G–K）**回答「这类问题在 Agent 系统里应该怎么分析」，先给可迁移的方法，再回到本项目看它实现了什么、没实现什么。**即使面试官问的不是你的项目，这套分析方法也能用。**
+- **综合架构（L–N）**不针对具体故障，考察整体设计判断——职责划分、故障定位、架构演进。回答时要有一条清楚的主线。
+
+---
+
+## 二、简历每条主张的证据
+
+| 简历 bullet | 关键主张 | 代码证据 | 文档 |
+| --- | --- | --- | --- |
+| **Agent 执行链路** | 服务端集成 SDK、封装会话实例管理与命令分发 | `server/utils/rpc-manager.ts` `AgentSessionWrapper` / `send()` / `registry` | [01 Q4](./01-execution-and-streaming) |
+| | 事件适配为前端事件 | `shared/lib/agent-event-wire.ts` `toClientAgentEvent`（移植 + 去 SDK 类型依赖） | [01 Q7](./01-execution-and-streaming) |
+| | 通过 SSE 持续推送 | `server/utils/event-stream.ts`（移植，输入改 `AbortSignal`） | [01 Q8](./01-execution-and-streaming) |
+| | **区分命令接纳与整轮任务完成两个时点** | `rpc-manager.ts` `preflight` / `prompt` | [01 Q5](./01-execution-and-streaming) |
+| **流式消息与工具状态** | 纯函数 reducer 按内容索引组装消息块 | `shared/lib/streaming-message.ts`（**原样移植**） | [02 Q12](./02-state-and-session-recovery) [Q13](./02-state-and-session-recovery) |
+| | `toolCallId` 关联工具调用与执行结果 | `app/stores/chat.ts` `toolResultsByCallId` | [02 Q14](./02-state-and-session-recovery) |
+| | 流式内容与工具运行状态分层展示 | `chat.ts` `activeTools` + `app/components/ToolCallCard.vue` | [02 Q15](./02-state-and-session-recovery) |
+| **会话恢复与上下文** | 历史查询 + 助手消息快照 + SSE 重连恢复界面 | `chat.ts` `reload()`、`event-stream.ts` 快照重放 | [02 Q16](./02-state-and-session-recovery) |
+| | 会话 ID、操作代次、查询序号校验异步结果 | `chat.ts` `sessionGeneration` / `reloadSequence` | [02 Q17](./02-state-and-session-recovery) |
+| | 手动/自动压缩事件、上下文占用、Token 用量 | `chat.ts` 压缩事件、`shared/lib/session-stats.ts`（移植） | [02 Q19](./02-state-and-session-recovery) [Q20](./02-state-and-session-recovery) |
+
+---
+
+## 三、P0 清单
+
+时间有限就先过这十四条。
+
+| # | 问题 | 位置 |
+| --- | --- | --- |
+| 1 | 为什么给 pi 做 Web 界面（CLI 已有树导航和分叉） | [01 Q1](./01-execution-and-streaming) |
+| 2 | 用户发一句话之后完整调用链 | [01 Q2](./01-execution-and-streaming) |
+| 3 | SDK 提供了什么、哪些是移植的、你写了什么 | [01 Q4](./01-execution-and-streaming) |
+| 4 | 命令接纳与整轮完成为什么是两个时点 | [01 Q5](./01-execution-and-streaming) |
+| 5 | registry + locks 解决什么，不解决什么 | [01 Q6](./01-execution-and-streaming) |
+| 6 | 为什么用 reducer，索引边界在哪 | [02 Q12](./02-state-and-session-recovery) [Q13](./02-state-and-session-recovery) |
+| 7 | 刷新后恢复了什么、没恢复什么 | [02 Q16](./02-state-and-session-recovery) |
+| 8 | 三层判据分别防什么 | [02 Q17](./02-state-and-session-recovery) |
+| 9 | 压缩是谁实现的、两种 Token 口径 | [02 Q19](./02-state-and-session-recovery) [Q20](./02-state-and-session-recovery) |
+| 10 | 用户改主意（追加/停止/撤回）怎么设计 | [03 场景 A](./03-scenario-questions) |
+| 11 | 编辑历史为什么从父节点开分支 | [03 场景 B](./03-scenario-questions) |
+| 12 | 工具超时、重试和幂等怎么设计（通用） | [03 场景 G](./03-scenario-questions) |
+| 13 | 从零设计 Agent 工作台怎么划分职责（综合） | [03 场景 L](./03-scenario-questions) |
+| 14 | 用户反馈「任务卡住了」怎么分层定位（综合） | [03 场景 M](./03-scenario-questions) |
+
+---
+
+## 四、阅读路线
+
+**只有 2 小时**：
+
+```text
+01 的 Q2（完整链路）+ Q5（两个完成时点）
+  → 02 的 Q16（恢复什么）+ Q17（三层判据）
+  → 03 的场景 A、B、G、L
+```
+
+**有 2 天**：第一天 01 → 02 配源码读；第二天 03 的项目专项（A–F）逐个自测。
+
+**有 1 周**：三篇逐篇读，读完打开对应源码走一遍。**通用场景（G–K）和综合架构（L–N）建议单独练**——它们不依赖本项目，适合用来应对「换个 Agent 项目你会怎么做」这类问题。
+
+---
+
+## 五、能力归属：四类分清
+
+面试最容易出错的地方是把别人的东西说成自己的。按下面四类讲。
+
+**1. Pi SDK 提供（`0.85.1`）**
+
+Agent 执行循环、模型调用、工具注册与执行、会话文件 JSONL 读写与 entry 树、**上下文压缩算法**、上下文占用估算、分支导航 `navigateTree`、事件（`agent_settled` / `queue_update` / `compaction_*` / `auto_retry_*`）、运行中消息队列、`preflightResult` 钩子。
+
+**2. 从 pi-web 移植（见 `THIRD_PARTY_NOTICES.md`，登记 27 个文件）**
+
+| 文件 | 性质 |
+| --- | --- |
+| `shared/lib/streaming-message.ts` | **原样** |
+| `shared/lib/agent-event-connection.ts` | **原样** |
+| `shared/lib/agent-client.ts` | **原样** |
+| `shared/lib/normalize.ts` | 逻辑原样，注释改写 |
+| `shared/lib/agent-event-wire.ts` | 去掉 SDK 类型依赖、手写最小事件结构 |
+| `shared/lib/session-stats.ts` | 只保留 `computeSessionStats`，未移植 `branch_summary` |
+| `shared/lib/session-branches.ts` | 借鉴思路，改为精简树 DTO 迭代实现 |
+| `server/utils/event-stream.ts` | 移植，输入改为标准 `AbortSignal` |
+| `server/utils/rpc-manager.ts` | **简化重写**（上游约 2118 行 → 约 470 行） |
+| `server/utils/session-reader.ts` | 移植，去 defer、加累计统计 |
+
+> **不能因为文件在 `server/` 就当成原创。** 完整清单以 `THIRD_PARTY_NOTICES.md` 为准。
+
+**3. 本项目改写或新增**
+
+会话实例注册与并发合并、两个完成时点的拆分与自造事件（`prompt_done` / `prompt_error` / `connected` / `startup_error`）、接纳串行链、前端三层判据与队列版本、编辑历史的分支流程、停止前撤回队列、图片三层防护、空闲回收与文件锁重试、50 个测试文件。
+
+**4. 未实现**
+
+| 未实现 | 说明 |
+| --- | --- |
+| **`fork` / `clone`** | `rpc-manager.ts` 里是抛错占位；当前分支能力走 `navigate_tree`（同文件内移动 leaf） |
+| **事件重放 / 断点续传** | SSE 重连只补订阅之后的增量，无事件序号和游标 |
+| **任务级恢复** | 服务端进程重启后执行无法恢复 |
+| **任务持久化** | 无独立任务队列、无执行状态落库 |
+| **结果验证层** | 展示执行过程，不判断任务是否真的成功 |
+| **MCP 接入** | `McpPanel.vue` 是纯占位，无连接逻辑 |
+| **RAG / 多用户 / 多 Worker** | 均未实现 |
+| **单条撤回队列** | Pi 只支持清空全部队列 |
+
+> 涉及未实现能力的题（RAG 设计、MCP 完整接入、多用户部署、Workflow 选型、Agent 评估）不在本文档范围内——它们在面试中只能作为「扩展设计」讨论，且必须先声明未实现。
+
+---
+
+## 六、事实分级
+
+读这套文档时请区分四类结论。
+
+**源码确认**：可以直接从代码得出。例如「压缩不删历史」「两个 Token 口径不同」「三层判据各防一类竞态」。
+
+**测试覆盖**：明确是单元测试还是集成测试。项目有 50 个测试文件，其中 `streaming-message.test.ts` 只覆盖 reducer 的正常递增路径；`chat-races.test.ts` 覆盖 9 个竞态用例；`chat-queue.test.ts` 覆盖停止与撤回。**没有浏览器真实链路测试**。
+
+**静态推导**：从代码路径推导但未实测。例如「工具执行结束到结果到达之间卡片显示完成」「`syncFromSessionCwd` 缺守卫」「`_start`/`_end` 越界会写稀疏数组」。
+
+**待核实**：依赖外部行为或未经验证的假设。例如「SDK 是否复用同一对象引用（影响快照去重）」「外部 bash 子进程在父进程退出后是否存活」。
+
+---
+
+## 七、最需要主动划清的边界
+
+1. **CLI 能力是完整的**——`/tree`、`/fork`、`/clone`、`/resume` 和分支摘要都有；Web 端的价值在呈现层
+2. **reducer、连接管理、部分 SSE 是移植的**——不是从零自研
+3. **压缩算法是 SDK 的**——项目只做事件对接和状态展示
+4. **界面恢复 ≠ 任务恢复**——刷新恢复界面，服务端重启任务就没了
+5. **对账机制存在但不保证成功**——`reload` 失败时静默返回
+6. **上下文占用 ≠ 累计 Token**——前者压缩后下降，后者只增不减
+7. **`isStreaming === false` ≠ 会话完全空闲**——它不含压缩状态
+8. **没有结果验证层**——展示的是执行过程，不是结果可信度
+9. **没有 `fork`**——`navigate_tree` 是同文件内移动指针
+10. **`registry + locks` 不提供命令幂等**——只合并初始化
+
+---
+
+> **维护说明**：本分组是站点侧 curated 稿，源文档在 `pi-web-vue` 仓库的 `docs/interview/pi-web-vue/`。`npm run sync:interview` 不会覆盖本目录，只负责在侧栏登记入口。

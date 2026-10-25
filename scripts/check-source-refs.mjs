@@ -23,6 +23,14 @@ const PI_ROOT = (process.env.PI_ROOT ?? "D:/project/ts-pi/pi").replace(/\\/g, "/
 const DOCS_ROOT = "docs";
 const JSON_OUT = process.argv.includes("--json");
 
+/**
+ * 不参与校验的目录（相对 docs/，以 / 结尾）。
+ * 这些文档的源码引用指向**别的仓库**，用 Pi 的 packages/ 索引解析必然误报：
+ * - interview/pi-web-vue/：引用 pi-web-vue 自己的 app/ server/ shared/ 源码，
+ *   以及该仓库 node_modules 里 SDK 的 dist/ 文件。
+ */
+const SKIP_PREFIXES = ["interview/pi-web-vue/"];
+
 /** 带行号引用时，符号允许出现在该行号 ± 这个范围内（上游会漂移） */
 const LINE_TOLERANCE = 3;
 
@@ -210,6 +218,7 @@ const warnings = [];
 let refCount = 0;
 
 for (const doc of walk(DOCS_ROOT)) {
+  if (SKIP_PREFIXES.some((p) => doc.startsWith(`${DOCS_ROOT}/${p}`))) continue;
   const lines = fs.readFileSync(doc, "utf8").split(/\r?\n/);
 
   let inFence = false;

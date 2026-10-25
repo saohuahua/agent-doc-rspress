@@ -9,6 +9,27 @@
     ]
   },
   {
+    "text": "项目面经",
+    "items": [
+      {
+        "text": "pi-web-vue 项目面经",
+        "link": "/interview/pi-web-vue/"
+      },
+      {
+        "text": "执行链路与流式传输",
+        "link": "/interview/pi-web-vue/01-execution-and-streaming"
+      },
+      {
+        "text": "状态管理与会话恢复",
+        "link": "/interview/pi-web-vue/02-state-and-session-recovery"
+      },
+      {
+        "text": "综合场景题",
+        "link": "/interview/pi-web-vue/03-scenario-questions"
+      }
+    ]
+  },
+  {
     "text": "Agent 面经",
     "items": [
       {
