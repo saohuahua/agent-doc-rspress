@@ -16,16 +16,16 @@
         "link": "/interview/pi-web-vue/"
       },
       {
-        "text": "执行链路与流式传输",
-        "link": "/interview/pi-web-vue/01-execution-and-streaming"
+        "text": "项目定位与选型",
+        "link": "/interview/pi-web-vue/01-project-and-selection"
       },
       {
-        "text": "状态管理与会话恢复",
-        "link": "/interview/pi-web-vue/02-state-and-session-recovery"
+        "text": "核心设计的取舍",
+        "link": "/interview/pi-web-vue/02-design-tradeoffs"
       },
       {
-        "text": "综合场景题",
-        "link": "/interview/pi-web-vue/03-scenario-questions"
+        "text": "场景与综合",
+        "link": "/interview/pi-web-vue/03-scenarios"
       }
     ]
   },

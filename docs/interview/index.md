@@ -9,9 +9,9 @@
 > 以简历三条 bullet 为主线的项目面经：执行链路与流式传输、状态管理与会话恢复、综合场景题。所有结论都能落到源码，代码证明不了的标「静态推导」或「待核实」。
 
 - [pi-web-vue 项目面经（导读）](./pi-web-vue/)
-- [01 执行链路与流式传输](./pi-web-vue/01-execution-and-streaming)
-- [02 状态管理与会话恢复](./pi-web-vue/02-state-and-session-recovery)
-- [03 综合场景题](./pi-web-vue/03-scenario-questions)
+- [01 项目定位与选型](./pi-web-vue/01-project-and-selection)
+- [02 核心设计的取舍](./pi-web-vue/02-design-tradeoffs)
+- [03 场景与综合](./pi-web-vue/03-scenarios)
 
 ## 🤖 Agent 面经
 

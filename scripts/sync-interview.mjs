@@ -119,9 +119,9 @@ const PROJECT_GROUPS = [
     group: "项目面经",
     items: [
       { slug: "index", title: "pi-web-vue 项目面经" },
-      { slug: "01-execution-and-streaming", title: "执行链路与流式传输" },
-      { slug: "02-state-and-session-recovery", title: "状态管理与会话恢复" },
-      { slug: "03-scenario-questions", title: "综合场景题" },
+      { slug: "01-project-and-selection", title: "项目定位与选型" },
+      { slug: "02-design-tradeoffs", title: "核心设计的取舍" },
+      { slug: "03-scenarios", title: "场景与综合" },
     ],
     dest: "pi-web-vue",
   },
