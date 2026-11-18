@@ -39,7 +39,6 @@ const leetcodeSidebar = fs.existsSync(leetcodeSidebarFile)
 export default defineConfig({
   base: '/agent-doc-rspress/',
   icon: '/favicon.svg',
-  logo: '/favicon.svg',
   plugins: [
     pluginShiki({
       // 行内标注 // [!code highlight] 需要显式开启 highlight 转换器（插件默认不带任何转换器）
@@ -61,19 +60,20 @@ export default defineConfig({
   },
   root: path.join(__dirname, 'docs'),
   lang: 'zh',
-  title: 'Agent 笔记',
-  description: 'Agent 学习与 Pi 源码解析 · 面经八股速查',
-  logoText: 'Agent 笔记',
+  title: 'saohuahua',
+  description: 'saohuahua 的个人主页，记录 Agent 原理、Pi 源码和技术实践。',
+  logoText: 'saohuahua',
   themeConfig: {
+    searchPlaceholderText: '搜索',
+    searchNoResultsText: '没有找到结果',
+    searchSuggestedQueryText: '请试试其他关键词',
     nav: [
-      { text: '首页', link: '/', activeMatch: '^/$' },
-      { text: 'Learn Agent', link: '/learn/', activeMatch: '/learn/' },
-      { text: 'Pi 指南', link: '/pi/guide/', activeMatch: '/pi/guide/' },
-      { text: 'Pi 原理', link: '/pi/principle/', activeMatch: '/pi/principle/' },
-      { text: '实验室', link: '/pi/lab/', activeMatch: '/pi/lab/' },
-      { text: '面经', link: '/interview/', activeMatch: '/interview/' },
-      { text: '力扣', link: '/leetcode/', activeMatch: '/leetcode/' },
-      { text: '使用记录', link: '/practice/', activeMatch: '/practice/' },
+      { text: '首页', link: '/', activeMatch: '^/(?:index(?:\\.html)?)?$' },
+      {
+        text: '技术笔记',
+        link: '/notes/',
+        activeMatch: '^/(?:notes|learn|pi|interview|leetcode|practice)(?:/|$)',
+      },
     ],
     sidebar: {
       '/learn/': [
@@ -210,9 +210,11 @@ export default defineConfig({
     },
     socialLinks: [
       {
-        icon: 'github',
+        icon: {
+          svg: '<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 16 16" role="img" aria-label="GitHub"><path fill="currentColor" d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.49c-2.23.49-2.7-.95-2.7-.95-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.22.83 1.22.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.96 0-.87.31-1.59.83-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.66 7.66 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.52.56.83 1.28.83 2.15 0 3.08-1.88 3.76-3.67 3.96.29.25.55.73.55 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>',
+        },
         mode: 'link',
-        content: 'https://github.com',
+        content: 'https://github.com/saohuahua',
       },
     ],
   },

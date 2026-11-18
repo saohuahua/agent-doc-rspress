@@ -1,3 +1,51 @@
+html:root {
+  --rp-c-bg: #fff;
+  --rp-c-bg-soft: #f7f7f7;
+  --rp-c-bg-mute: #eee;
+  --rp-c-bg-alt: var(--rp-c-bg-soft);
+  --rp-c-text-1: #000;
+  --rp-c-text-2: #555;
+  --rp-c-text-3: #6e6e6e;
+  --rp-c-text-4: #aaa;
+  --rp-c-gray: #6e6e6e;
+  --rp-c-divider: #ccc;
+  --rp-c-divider-light: #e5e5e5;
+  --rp-c-link: var(--rp-c-text-1);
+  --rp-c-brand: var(--rp-c-text-1);
+  --rp-c-brand-dark: var(--rp-c-text-1);
+  --rp-c-brand-darker: var(--rp-c-text-1);
+  --rp-c-brand-light: var(--rp-c-text-2);
+  --rp-c-brand-lighter: var(--rp-c-text-3);
+  --rp-c-brand-tint: var(--rp-c-bg-mute);
+  --rp-c-text-code: var(--rp-c-text-1);
+  --rp-c-text-code-bg: var(--rp-c-bg-mute);
+}
+
+html.dark {
+  --rp-c-bg: #141414;
+  --rp-c-bg-soft: #1e1e1e;
+  --rp-c-bg-mute: #282828;
+  --rp-c-text-1: #f5f5f5;
+  --rp-c-text-2: #b5b5b5;
+  --rp-c-text-3: #999;
+  --rp-c-text-4: #666;
+  --rp-c-gray: #999;
+  --rp-c-divider: #505050;
+  --rp-c-divider-light: #383838;
+  --rp-c-link: var(--rp-c-text-1);
+  --rp-c-text-code: var(--rp-c-text-1);
+}
+
+:where(.rspress-nav, .rspress-nav-screen, .rspress-doc, .personal-home) :focus-visible {
+  outline: 2px solid var(--rp-c-text-1);
+  outline-offset: 3px;
+}
+
+.rspress-doc :where(p, li) > a[href] {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
 /* Present Markdown tables as a single, scannable data surface. */
 .rspress-doc table {
   width: fit-content;
