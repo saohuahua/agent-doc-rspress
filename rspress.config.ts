@@ -68,12 +68,14 @@ export default defineConfig({
     searchNoResultsText: '没有找到结果',
     searchSuggestedQueryText: '请试试其他关键词',
     nav: [
-      { text: '首页', link: '/', activeMatch: '^/(?:index(?:\\.html)?)?$' },
+      { text: 'Blog', link: '/blog/', activeMatch: '^/blog(?:/|$)' },
       {
         text: '技术笔记',
         link: '/notes/',
         activeMatch: '^/(?:notes|learn|pi|interview|leetcode|practice)(?:/|$)',
       },
+      { text: 'Pi Agent', link: '/projects/', activeMatch: '^/projects(?:/|$)' },
+      { text: '关于', link: '/about/', activeMatch: '^/about(?:/|$)' },
     ],
     sidebar: {
       '/learn/': [
