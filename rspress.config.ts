@@ -53,6 +53,17 @@ export default defineConfig({
       ],
     }),
     pluginMermaid(),
+    {
+      name: 'blog-reading-time',
+      extendPageData(page) {
+        if (!page._relativePath.startsWith('blog/') || page.frontmatter.pageType === 'custom') return;
+
+        const hanCharacters = page.content.match(/\p{Script=Han}/gu)?.length ?? 0;
+        const otherWords = page.content.replace(/\p{Script=Han}/gu, ' ')
+          .match(/[\p{Letter}\p{Number}]+/gu)?.length ?? 0;
+        page.frontmatter.readingMinutes = Math.max(1, Math.ceil(hanCharacters / 450 + otherWords / 220));
+      },
+    },
   ],
   markdown: {
     mdxRs: false,
@@ -152,7 +163,7 @@ export default defineConfig({
           items: [
             { text: '总览与阅读路线', link: '/pi/principle/' },
             { text: '01 总体架构与设计哲学', link: '/pi/principle/01-architecture' },
-            { text: '05 Context Engineering', link: '/pi/principle/doc_05_agent_context_engineering' }
+            { text: '05 Context Engineering', link: '/pi/principle/doc_05_agent_context_engineering' },
             {
               text: '02 输入如何进入 Agent',
               link: '/pi/principle/02-message-journey/',

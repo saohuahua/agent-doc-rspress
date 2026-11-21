@@ -1,6 +1,7 @@
 ---
 title: 这个博客想写些什么
 description: 从流式消息的问题说起，介绍博客会记录的开发过程。
+date: '2026-11-21'
 sidebar: false
 ---
 
