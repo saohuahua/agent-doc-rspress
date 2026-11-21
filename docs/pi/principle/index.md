@@ -82,7 +82,7 @@ Pi 为此增加了哪些结构
 | 02 | [输入如何进入 Agent](./02-message-journey/) | ★★★ | 最小 `prompt(text)` 为什么不够用，四个阶段各补什么 | #1 #2 | ✅ |
 | 03 | [Agent 如何持续工作并最终停止](./03-agent-loop/) | ★★★ | 最小 `while` 怎么长成生产循环，以及怎么真的停下来 | #1 #2 | ✅ |
 | 04 | [工具怎么被安全地执行](./04-tool-system/) | ★★★ | 模型写错参数怎么办、并行会不会写坏文件 | #2 #10 | ✅ |
-| 05 | Context Engineering | ★★★ | System Prompt 怎么拼、上下文怎么不被污染 | #1 #3 | ⏳ |
+| 05 | [Context Engineering](./doc_05_agent_context_engineering) | ★★★ | System Prompt 怎么拼、上下文怎么不被污染 | #1 #3 | ✅ |
 | 06 | 会话、压缩与分支 | ★★ | 长会话为什么会崩、压缩的代价 | #3 #12 | ⏳ |
 | 07 | 断点续跑与幂等 | ★ | 崩了怎么恢复、什么能重放 | #7 | ⏳ |
 | 08 | 模型抽象与 Provider | ★★ | 30+ Provider 差异怎么收敛成数据 | #8 #9 | ⏳ |

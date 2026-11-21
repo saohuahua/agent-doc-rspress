@@ -152,6 +152,7 @@ export default defineConfig({
           items: [
             { text: '总览与阅读路线', link: '/pi/principle/' },
             { text: '01 总体架构与设计哲学', link: '/pi/principle/01-architecture' },
+            { text: '05 Context Engineering', link: '/pi/principle/doc_05_agent_context_engineering' }
             {
               text: '02 输入如何进入 Agent',
               link: '/pi/principle/02-message-journey/',

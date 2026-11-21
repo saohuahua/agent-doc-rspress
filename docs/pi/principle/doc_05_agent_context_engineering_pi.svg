@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1160 760" width="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="card-shadow" x="-4%" y="-4%" width="108%" height="112%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f172a" flood-opacity="0.06"/>
+    </filter>
+    <marker id="arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#d97706"/>
+    </marker>
+    <marker id="arr-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <!-- 纯白画布背景 -->
+  <rect width="1160" height="760" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+
+  <!-- 顶部标题栏 -->
+  <rect x="28" y="24" width="6" height="38" rx="3" fill="#2563eb"/>
+  <text x="46" y="42" fill="#0f172a" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="19" font-weight="bold">Agent Context Engineering：信息生命周期、通用管理管线与 Pi 源码映射</text>
+  <text x="46" y="62" fill="#64748b" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="12">核心主线：持久化档案库（Session / Memory）与单轮窗口投影（Context）分离，在有限容量内维持高信噪比与前缀缓存稳定</text>
+  <line x1="28" y1="76" x2="1132" y2="76" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- ================= 第一层：四大信息供给与外部持久化存储 ================= -->
+  <rect x="28" y="90" width="1104" height="196" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+  <rect x="44" y="104" width="24" height="20" rx="4" fill="#2563eb"/>
+  <text x="56" y="118" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="11" font-weight="bold">01</text>
+  <text x="76" y="118" fill="#0f172a" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="13.5" font-weight="bold">信息供给与持久化存储层（完整档案留存外部，绝不无条件全量塞入单次请求窗口）</text>
+
+  <!-- Card 1: Session Store -->
+  <rect x="44" y="136" width="256" height="134" rx="8" fill="#ffffff" stroke="#3b82f6" stroke-width="1.4" filter="url(#card-shadow)"/>
+  <rect x="44" y="136" width="256" height="28" rx="8" fill="#eff6ff"/>
+  <text x="172" y="154" text-anchor="middle" fill="#1d4ed8" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="12" font-weight="bold">会话存储 (Session Store)</text>
+  <text x="56" y="182" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• 完整交互历史与工具调用轨迹</text>
+  <text x="56" y="200" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• 分支结构与结构化压缩摘要节点</text>
+  <text x="56" y="218" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• 纯 UI 通知与扩展自定义状态</text>
+  <rect x="56" y="232" width="232" height="26" rx="4" fill="#f1f5f9"/>
+  <text x="172" y="249" text-anchor="middle" fill="#1e40af" font-family="Consolas, monospace" font-size="10.5">Pi: SessionManager (JSONL Tree)</text>
+
+  <!-- Card 2: Working State -->
+  <rect x="316" y="136" width="256" height="134" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.4" filter="url(#card-shadow)"/>
+  <rect x="316" y="136" width="256" height="28" rx="8" fill="#ecfdf5"/>
+  <text x="444" y="154" text-anchor="middle" fill="#047857" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="12" font-weight="bold">任务工作状态 (Working State)</text>
+  <text x="328" y="182" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• 当前子目标拆解与排查进度</text>
+  <text x="328" y="200" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• 已修改文件列表与红线约束锚点</text>
+  <text x="328" y="218" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• 超大工具输出落盘的外部临时文件</text>
+  <rect x="328" y="232" width="232" height="26" rx="4" fill="#f1f5f9"/>
+  <text x="444" y="249" text-anchor="middle" fill="#065f46" font-family="Consolas, monospace" font-size="10.5">Pi: truncate.ts / Extension State</text>
+
+  <!-- Card 3: Long-Term Memory & RAG -->
+  <rect x="588" y="136" width="256" height="134" rx="8" fill="#ffffff" stroke="#a855f7" stroke-width="1.4" filter="url(#card-shadow)"/>
+  <rect x="588" y="136" width="256" height="28" rx="8" fill="#faf5ff"/>
+  <text x="716" y="154" text-anchor="middle" fill="#7e22ce" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="12" font-weight="bold">长期记忆与按需检索 (Memory &amp; RAG)</text>
+  <text x="600" y="182" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• 语义记忆：项目规范 (AGENTS.md)</text>
+  <text x="600" y="200" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• 情景记忆：跨会话历史排障经验归并</text>
+  <text x="600" y="218" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• 即时检索：rg 精确搜索或向量召回</text>
+  <rect x="600" y="232" width="232" height="26" rx="4" fill="#f1f5f9"/>
+  <text x="716" y="249" text-anchor="middle" fill="#6b21a8" font-family="Consolas, monospace" font-size="10.5">Pi: AGENTS.md + bash(rg) / Subagent</text>
+
+  <!-- Card 4: Procedural Rules & Skills -->
+  <rect x="860" y="136" width="256" height="134" rx="8" fill="#ffffff" stroke="#6366f1" stroke-width="1.4" filter="url(#card-shadow)"/>
+  <rect x="860" y="136" width="256" height="28" rx="8" fill="#eef2ff"/>
+  <text x="988" y="154" text-anchor="middle" fill="#4338ca" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="12" font-weight="bold">程序性契约与技能 (Tools &amp; Skills)</text>
+  <text x="872" y="182" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• System Prompt 与核心工具 Schema</text>
+  <text x="872" y="200" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• SKILL.md 渐进式披露（先索引后正文）</text>
+  <text x="872" y="218" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• MCP 外部工具契约按需挂载</text>
+  <rect x="872" y="232" width="232" height="26" rx="4" fill="#f1f5f9"/>
+  <text x="988" y="249" text-anchor="middle" fill="#3730a3" font-family="Consolas, monospace" font-size="10.5">Pi: ResourceLoader + SKILL.md</text>
+
+  <!-- 向下汇聚箭头 -->
+  <line x1="580" y1="286" x2="580" y2="316" stroke="#2563eb" stroke-width="2" marker-end="url(#arr-blue)"/>
+
+  <!-- ================= 第二层：通用 Context Manager 六步治理装配流水线 ================= -->
+  <rect x="28" y="320" width="1104" height="224" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+  <rect x="44" y="334" width="24" height="20" rx="4" fill="#059669"/>
+  <text x="56" y="348" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="11" font-weight="bold">02</text>
+  <text x="76" y="348" fill="#0f172a" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="13.5" font-weight="bold">通用 Context Manager 每轮推理前装配与治理流水线（非破坏性投影，不改写原始档案）</text>
+
+  <!-- Step 1 -->
+  <rect x="44" y="368" width="160" height="158" rx="8" fill="#ffffff" stroke="#3b82f6" stroke-width="1.4" filter="url(#card-shadow)"/>
+  <text x="124" y="390" text-anchor="middle" fill="#1d4ed8" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11.5" font-weight="bold">① 分支载入与召回</text>
+  <line x1="56" y1="400" x2="192" y2="400" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="56" y="420" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 沿活跃分支回溯历史</text>
+  <text x="56" y="438" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 遇到最近摘要节点停止</text>
+  <text x="56" y="456" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 召回匹配的记忆/Skill</text>
+  <rect x="56" y="482" width="136" height="32" rx="4" fill="#eff6ff"/>
+  <text x="124" y="502" text-anchor="middle" fill="#1e40af" font-family="Consolas, monospace" font-size="9.5">buildSessionContext()</text>
+
+  <line x1="204" y1="447" x2="224" y2="447" stroke="#475569" stroke-width="1.6" marker-end="url(#arr-slate)"/>
+
+  <!-- Step 2 -->
+  <rect x="228" y="368" width="160" height="158" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1.4" filter="url(#card-shadow)"/>
+  <text x="308" y="390" text-anchor="middle" fill="#047857" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11.5" font-weight="bold">② 筛选与信任隔离</text>
+  <line x1="240" y1="400" x2="376" y2="400" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="240" y="420" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 评估相关性与时效性</text>
+  <text x="240" y="438" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 清理已修改的旧文件读</text>
+  <text x="240" y="456" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 隔离外部不可信数据块</text>
+  <rect x="240" y="482" width="136" height="32" rx="4" fill="#ecfdf5"/>
+  <text x="308" y="502" text-anchor="middle" fill="#065f46" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="9.5">防 Context Rot 与注入</text>
+
+  <line x1="388" y1="447" x2="408" y2="447" stroke="#475569" stroke-width="1.6" marker-end="url(#arr-slate)"/>
+
+  <!-- Step 3 -->
+  <rect x="412" y="368" width="160" height="158" rx="8" fill="#ffffff" stroke="#f59e0b" stroke-width="1.4" filter="url(#card-shadow)"/>
+  <text x="492" y="390" text-anchor="middle" fill="#b45309" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11.5" font-weight="bold">③ 预算与水位检测</text>
+  <line x1="424" y1="400" x2="560" y2="400" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="424" y="420" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 扣除系统前缀与输出预留</text>
+  <text x="424" y="438" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 未超线：保持前缀不动</text>
+  <text x="424" y="456" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 超水位线：触发治理策略</text>
+  <rect x="424" y="482" width="136" height="32" rx="4" fill="#fffbeb"/>
+  <text x="492" y="502" text-anchor="middle" fill="#92400e" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="9.5">保护 KV-Cache 前缀命中</text>
+
+  <line x1="572" y1="447" x2="592" y2="447" stroke="#475569" stroke-width="1.6" marker-end="url(#arr-slate)"/>
+
+  <!-- Step 4 -->
+  <rect x="596" y="368" width="168" height="158" rx="8" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5" filter="url(#card-shadow)"/>
+  <text x="680" y="390" text-anchor="middle" fill="#065f46" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11.5" font-weight="bold">④ 修剪与结构化压缩</text>
+  <line x1="608" y1="400" x2="752" y2="400" stroke="#a7f3d0" stroke-width="1"/>
+  <text x="608" y="420" fill="#064e3b" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 旧 toolResult 内容折叠</text>
+  <text x="608" y="438" fill="#064e3b" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 增量滚动摘要 / Split-Turn</text>
+  <text x="608" y="456" fill="#064e3b" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 保留决策与文件路径索引</text>
+  <rect x="608" y="482" width="144" height="32" rx="4" fill="#d1fae5"/>
+  <text x="680" y="502" text-anchor="middle" fill="#065f46" font-family="Consolas, monospace" font-size="9.5">transformContext / compact</text>
+
+  <line x1="764" y1="447" x2="784" y2="447" stroke="#7c3aed" stroke-width="1.6" marker-end="url(#arr-purple)"/>
+
+  <!-- Step 5 -->
+  <rect x="788" y="368" width="168" height="158" rx="8" fill="#faf5ff" stroke="#a855f7" stroke-width="1.5" filter="url(#card-shadow)"/>
+  <text x="872" y="390" text-anchor="middle" fill="#581c87" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11.5" font-weight="bold">⑤ 锚定与协议投影</text>
+  <line x1="800" y1="400" x2="944" y2="400" stroke="#e9d5ff" stroke-width="1"/>
+  <text x="800" y="420" fill="#3b0764" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 首部锁定用户初始目标</text>
+  <text x="800" y="438" fill="#3b0764" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 尾部注入当前状态便签</text>
+  <text x="800" y="456" fill="#3b0764" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 校验 CallID 配对合法性</text>
+  <rect x="800" y="482" width="144" height="32" rx="4" fill="#f3e8ff"/>
+  <text x="872" y="502" text-anchor="middle" fill="#581c87" font-family="Consolas, monospace" font-size="9.5">convertToLlm() → Message[]</text>
+
+  <line x1="956" y1="447" x2="976" y2="447" stroke="#d97706" stroke-width="1.6" marker-end="url(#arr-amber)"/>
+
+  <!-- Step 6 -->
+  <rect x="980" y="368" width="136" height="158" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5" filter="url(#card-shadow)"/>
+  <text x="1048" y="390" text-anchor="middle" fill="#78350f" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11.5" font-weight="bold">⑥ 模型推理执行</text>
+  <line x1="992" y1="400" x2="1104" y2="400" stroke="#fde68a" stroke-width="1"/>
+  <text x="992" y="420" fill="#78350f" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 注入缓存断点标记</text>
+  <text x="992" y="438" fill="#78350f" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 流式生成与工具调用</text>
+  <text x="992" y="456" fill="#78350f" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="10.5">• 结算缓存读写 Usage</text>
+  <rect x="992" y="482" width="112" height="32" rx="4" fill="#fef3c7"/>
+  <text x="1048" y="502" text-anchor="middle" fill="#92400e" font-family="Consolas, monospace" font-size="9.5">pi-ai Stream</text>
+
+  <!-- ================= 第三层：执行回流与六维质量评测闭环 ================= -->
+  <rect x="28" y="562" width="1104" height="174" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+  <rect x="44" y="576" width="24" height="20" rx="4" fill="#7c3aed"/>
+  <text x="56" y="590" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="11" font-weight="bold">03</text>
+  <text x="76" y="590" fill="#0f172a" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="13.5" font-weight="bold">状态写回闭环与上下文工程六维可靠性评测基准</text>
+
+  <!-- Left: Write-back Loop -->
+  <rect x="44" y="608" width="490" height="112" rx="8" fill="#ffffff" stroke="#3b82f6" stroke-width="1.3" filter="url(#card-shadow)"/>
+  <text x="60" y="630" fill="#1d4ed8" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="12" font-weight="bold">执行后写回与跨会话沉淀（Write-back &amp; Consolidation）</text>
+  <text x="60" y="652" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• 新生成的 assistant 消息与截断后的 toolResult 追加写入 Session Tree</text>
+  <text x="60" y="672" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• 同步更新 Working State（已改文件/最新测试结果），供下一轮投影使用</text>
+  <text x="60" y="692" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">• 累计 Usage 触及阈值时写入 CompactionEntry 摘要节点，任务结束归并长期经验</text>
+
+  <!-- Right: 6 Evaluation Metrics -->
+  <rect x="550" y="608" width="566" height="112" rx="8" fill="#ffffff" stroke="#7c3aed" stroke-width="1.3" filter="url(#card-shadow)"/>
+  <text x="566" y="630" fill="#6b21a8" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="12" font-weight="bold">上下文策略六维评测指标（不只看压缩率，更看任务最终可靠性）</text>
+  <text x="566" y="652" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">1. 任务最终成功率 (Task Success Rate)     4. 细节可恢复性 (Recovery Accuracy)</text>
+  <text x="566" y="672" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">2. 关键事实保留率 (Information Retention) 5. 全任务总成本与延迟 (Cost &amp; TTFT)</text>
+  <text x="566" y="692" fill="#334155" font-family="PingFang SC, Microsoft YaHei, Arial, sans-serif" font-size="11">3. 上下文信噪比 (Context Relevance)      6. 协议与指令边界完整性 (Integrity)</text>
+</svg>
