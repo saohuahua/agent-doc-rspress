@@ -1,0 +1,103 @@
+.rspress-doc .doc-block {
+  margin-block: 1.25rem;
+}
+
+.rspress-doc .doc-block > :is(ul, ol) {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+}
+
+.rspress-doc .doc-block > ul {
+  list-style: none;
+}
+
+.rspress-doc .doc-block > :is(ul, ol) > li {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.rspress-doc .doc-block__title {
+  color: var(--rp-c-text-1);
+}
+
+.rspress-doc .doc-block__body {
+  color: var(--rp-c-text-2);
+}
+
+.rspress-doc .doc-block__body > :first-child {
+  margin-top: 0;
+}
+
+.rspress-doc .doc-block__body > :last-child {
+  margin-bottom: 0;
+}
+
+.rspress-doc :is(.doc-block--concepts, .doc-block--compare) > :is(ul, ol) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rspress-doc :is(.doc-block--concepts, .doc-block--compare) > :is(ul, ol) > li {
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--rp-c-bg-soft);
+}
+
+.rspress-doc :is(.doc-block--concepts, .doc-block--compare, .doc-block--steps) .doc-block__title {
+  margin-bottom: 0.35rem;
+}
+
+.rspress-doc .doc-block--compare > :is(ul, ol) > li {
+  border: 1px solid var(--rp-c-divider-light);
+}
+
+.rspress-doc :is(.doc-block--compact, .doc-block--trace) > :is(ul, ol) {
+  gap: 0.35rem;
+}
+
+.rspress-doc :is(.doc-block--compact, .doc-block--trace) > :is(ul, ol) > li {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) minmax(0, 3fr);
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.5rem 0.7rem;
+}
+
+.rspress-doc .doc-block--compact > :is(ul, ol) > li:nth-child(odd),
+.rspress-doc .doc-block--trace .doc-block__body {
+  border-radius: 0.5rem;
+  background: var(--rp-c-bg-soft);
+}
+
+.rspress-doc .doc-block--steps > :is(ul, ol) {
+  padding-inline-start: 1.75rem;
+  list-style: decimal;
+}
+
+.rspress-doc .doc-block--steps > :is(ul, ol) > li::marker {
+  color: var(--rp-c-text-2);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.rspress-doc .doc-block--trace > :is(ul, ol) {
+  list-style: none;
+}
+
+.rspress-doc .doc-block--trace > :is(ul, ol) > li {
+  padding: 0;
+}
+
+.rspress-doc .doc-block--trace :is(.doc-block__title, .doc-block__body) {
+  padding: 0.5rem 0.7rem;
+}
+
+@media (max-width: 640px) {
+  .rspress-doc :is(.doc-block--concepts, .doc-block--compare) > :is(ul, ol),
+  .rspress-doc :is(.doc-block--compact, .doc-block--trace) > :is(ul, ol) > li {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+}

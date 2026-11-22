@@ -5,6 +5,7 @@ import { pluginShiki, createTransformerHighlight } from '@rspress/plugin-shiki';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { pluginMermaid } from './mermaid-plugin';
+import { remarkDocBlocks } from './doc-blocks-plugin';
 
 // 站点文档里出现的围栏语言，除了插件内置的那批（js/ts/jsx/tsx/json/css/scss/less/xml/diff/yaml/md/mdx/bash）
 // 之外还有下面这些：有语法文件的显式注册，没有语法文件的（plain / text / gitignore）用空语法注册。
@@ -69,7 +70,7 @@ export default defineConfig({
   ],
   markdown: {
     mdxRs: false,
-    remarkPlugins: [remarkMath],
+    remarkPlugins: [remarkMath, remarkDocBlocks],
     rehypePlugins: [rehypeKatex],
     showLineNumbers: true,
   },
