@@ -46,6 +46,16 @@ html.dark {
   text-underline-offset: 0.2em;
 }
 
+.rspress-doc h2:not(:where(.rp-not-doc *)) {
+  margin-top: clamp(34px, 5vw, 48px);
+  padding-top: 0;
+  border-top: 0;
+}
+
+.rspress-doc hr:not(:where(.rp-not-doc *)):has(+ :is(h2, h3, h4, h5, h6)) {
+  display: none;
+}
+
 /* Present Markdown tables as a single, scannable data surface. */
 .rspress-doc table {
   width: fit-content;
