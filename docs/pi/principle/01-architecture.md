@@ -1,397 +1,218 @@
 ---
-title: 01 总体架构与设计哲学
-description: Pi 的整体结构、每一层在做什么，以及这么拆的理由和代价
+title: 01 Pi 总体架构
+description: Pi Coding Agent 的分层、运行链路与状态边界
 ---
 
-# 01 总体架构与设计哲学
+# 01 Pi 总体架构
 
-以 **Pi v0.84.3 (+20, `8fa7eebd`)** 源码为基准。文中所有 `file:line` 经 `pnpm check:refs` 校验，代码块里的中文注释为本文补充。
+Pi Coding Agent 将模型请求、工具执行、会话管理和用户交互组织为一套运行过程。其核心由三个包构成：`pi-ai` 定义消息及模型接口，`pi-agent-core` 实现 Agent 状态和执行循环，`pi-coding-agent` 将循环与会话、工具、扩展和运行界面组装成应用。
 
-Agent 的基本循环在 [Learn 02](/learn/02-minimal-loop) 讲过，二十几行就能跑通。本文要看的是：从那二十几行到一个 12 万行的生产项目，中间多出来的东西被放在了哪里、为什么这么放。
-
-## 0. 本章回答哪些面试问题
-
-- **#1 AI Coding 整体的实现思路是什么** —— 三层职责、单向依赖、事件流，以及一次请求从哪进从哪出
-- **#6 通用 Harness 的核心工程能力有哪些技术难点** —— 难点直接写在 `AgentLoopConfig` 的接口上
-
-编号见交接文档 §12。
-
-## 一、总体架构
-
-Pi 是一个终端 AI 编码智能体。整体结构是这样的：
+## 分层与依赖
 
 ```text
-┌───────────────────────────────────────────────────────────────────────────┐
-│                          入口：四种运行模式                                  │
-│                                                                           │
-│    交互模式(TUI)      -p 打印       --mode json      --mode rpc      SDK    │
-│         └────────────────┴─────────────┴────────────────┴────────────┘     │
-│                                     │                                     │
-│  ┌──────────────────────────────────▼─────────────────────────────────┐   │
-│  │  coding-agent   产品层                              78768 行         │   │
-│  │                                                                    │   │
-│  │   AgentSession ── 斜杠命令 · Skill/模板展开 · 上下文压缩              │   │
-│  │                   会话读写 · 项目信任 · 认证解析 · 扩展加载 · 包管理    │   │
-│  │                                                                    │   │
-│  └──────────────────────────────────┬─────────────────────────────────┘   │
-│                                     │                                     │
-│         agentLoop(prompts, context, config, signal, streamFn)             │
-│                                     │                                     │
-│  ┌──────────────────────────────────▼─────────────────────────────────┐   │
-│  │  agent-core     循环层                              12915 行         │   │
-│  │                                                                    │   │
-│  │    ① 发请求 ─► ② 收流式回复 ─► ③ 有工具调用吗                          │   │
-│  │         ▲                              │                            │   │
-│  │         │                              ▼                            │   │
-│  │         └── ⑤ 结果写回上下文 ◄── ④ 校验参数 · 执行工具                 │   │
-│  │                                                                    │   │
-│  └──────────┬──────────────────────────────────────┬──────────────────┘   │
-│             │ streamFn                             │ tool.execute        │
-│  ┌──────────▼─────────────────────┐   ┌────────────▼──────────────────┐   │
-│  │  ai        模型层    27715 行    │   │  内置工具                       │   │
-│  │                                │   │                               │   │
-│  │  30+ Provider 的协议差异         │   │  read / write / edit          │   │
-│  │  认证（API Key / OAuth / 云）    │   │  bash / grep / find / ls      │   │
-│  │  流式事件、模型能力目录           │   │                               │   │
-│  └──────────┬─────────────────────┘   └────────────┬──────────────────┘   │
-└─────────────┼──────────────────────────────────────┼──────────────────────┘
-              ▼                                      ▼
-     Anthropic / OpenAI / Google              你的文件系统和 shell
-     / 本地 llama.cpp / ...
+CLI / SDK / RPC
+       │
+       ▼
+pi-coding-agent   会话、资源、工具、界面与运行配置
+       │
+       ▼
+pi-agent-core     Agent 状态、事件、模型与工具循环
+       │
+       ▼
+pi-ai             消息类型、模型请求、Provider 适配
 ```
 
-从上往下读这张图：
+这是核心依赖关系的简化视图。`coding-agent` 也直接使用 `pi-ai`，并依赖 TUI、MCP 和 Codemode 等包。Agent 核心并不依赖终端界面，因此可以由不同的宿主组装和驱动；模型层可以独立用于非 Agent 的模型调用。
 
-- **入口层**决定"谁在用"。同一套下层逻辑，套上 TUI 就是终端应用，套上 RPC 就能被 IDE 驱动，套上 SDK 就能嵌进别人的 Node 程序。
-- **产品层**（`coding-agent`）把散落的东西收拢：你敲的是斜杠命令还是普通消息、要不要展开 Skill、上下文是不是快满了要压缩、凭据在哪、哪些扩展要拦一手。它的产出是喂给循环层的那五个参数。
-- **循环层**（`agent-core`）只做一件事：拿上下文去问模型，模型要调工具就执行并把结果写回去，然后再问一次，直到模型不再要求调工具。
-- **模型层**（`ai`）把 30 多家 Provider 的协议、认证、能力差异吃掉，对上暴露统一的"发一段上下文、回一串流式事件"。
-- **工具**是真正碰磁盘和 shell 的地方。模型永远碰不到，它只能提出请求。
-
-三个角色的分工可以这样记：
-
-- **模型**负责决定下一步做什么
-- **循环**负责执行并把结果交回去
-- **产品**负责准备好这一切、并把过程呈现给你
-
-## 二、把这张图跑一遍
-
-架构图是静态的，看一次真实任务更直观。你在终端输入：
-
-```text
-把 src 下所有 console.log 删掉，然后跑一遍测试
-```
-
-接下来发生的事：
-
-```text
-你          Pi                              模型                本机
-│           │                                │                  │
-├─ 输入 ───►│                                │                  │
-│           ├─ 组装上下文 ─────────────────►│                  │
-│           │                                ├─ "先找一下"       │
-│           │◄──── 请求调用 grep ────────────┤                  │
-│           │                                │                  │
-│           ├─ 校验参数、执行 ──────────────────────────────────►│
-│           │◄──── 12 个文件 ───────────────────────────────────┤
-│           ├─ 结果写成文本，塞回上下文 ────►│                  │
-│           │                                ├─ "改第一个文件"   │
-│           │◄──── 请求调用 edit ────────────┤                  │
-│           ├─ 执行 ──────────────────────────────────────────►│
-│           │                              ...重复 N 次...      │
-│           │                                ├─ "跑测试"        │
-│           │◄──── 请求调用 bash ────────────┤                  │
-│           ├─ 执行 ──────────────────────────────────────────►│
-│           │◄──── 测试失败，2 个用例挂了 ──────────────────────┤
-│           ├─ 结果塞回上下文 ─────────────►│                  │
-│           │                                ├─ "我知道哪错了"   │
-│           │◄──── 再改一次 ─────────────────┤                  │
-│           │                               ...                 │
-│◄─ 完成 ───┤                                │                  │
-```
-
-这里有三点值得记住。
-
-**模型自始至终没有碰过磁盘。** 它做的只是提出请求——请求调用 `grep`、请求调用 `edit`。真正读文件、改文件、跑命令的是 Pi。模型影响世界的唯一途径，是它写出的那段结构化 JSON。
-
-**每一步都依赖上一步的结果。** 不知道 grep 找到哪些文件就没法决定改哪个，不知道测试报什么错就没法决定怎么修。所以这必须是循环，不能是一次性的批量请求。
-
-**Pi 干的活可以概括成一句话**：把模型的决定翻译成本机的动作，再把动作的结果翻译回模型能读懂的文字。
-
-这个角色有个通用叫法：**Harness**（挽具）。模型是马，harness 是把马和车连起来的那套装备。Pi 是面向编码场景的 harness。
-
-被问到"AI Coding 整体是怎么实现的"，从这个边界讲起比从"有一个 while 循环"讲起清楚得多。它同时解释了后面所有设计：为什么需要参数校验、为什么需要副作用拦截、为什么工具描述写得好不好那么重要。
-
-## 三、为什么要拆成三层
-
-三层的职责不同，更重要的是**变化频率不同**：
-
-- 模型厂商几乎每周都在变——新模型、新参数、新的兼容性坑
-- 循环本身很少变，一个正确的工具循环写完之后，改动主要来自 steering、abort 这类交互语义
-- 产品功能一直在加——新命令、新扩展点、新的界面细节
-
-如果搅在一起，加一家 Provider 就得动循环，改一个 TUI 细节就得担心影响工具执行。拆开之后，三种变化互不干扰。
-
-## 四、十个包与依赖方向
-
-各包的行数与职责：
-
-| 包 | 行数 | 职责 |
+| 包 | 主要输入 | 主要输出 |
 |---|---|---|
-| `coding-agent` | 78768 | 产品层：四种运行模式、会话、认证、扩展、包管理 |
-| `ai` | 27715 | 模型层：Provider 协议、认证、流式事件、模型目录 |
-| `tui` | 17668 | 终端 UI 组件库 |
-| `agent`（发布名 `pi-agent-core`） | 12915 | 循环层：Agent Loop、工具执行 |
-| `session-backends` | 2566 | 会话存储后端，目前是 sqlite |
-| `server` | 2314 | 实验中的远程服务端 |
-| `client` | 1393 | 实验中的远程客户端 |
-| `evals` | 1311 | 评估框架 |
-| `protocol` | 1245 | 实验中的 CBOR 传输协议 |
-| `telemetry` | 935 | 遥测 |
+| `pi-ai` | 模型、消息上下文、模型请求选项 | 模型的流式事件和最终消息 |
+| `pi-agent-core` | 消息、工具、模型、调度配置 | 状态变化、Agent 事件、工具结果 |
+| `pi-coding-agent` | 用户输入、资源配置、历史会话 | 用户界面、持久化会话、可嵌入的 SDK |
 
-依赖关系写在各包的 `package.json` 里：
+Provider 是对模型服务接口的适配。`pi-ai` 处理不同 Provider 的协议差异；它不决定任务是否继续、是否执行工具。这个决定由 Agent 循环根据模型消息、工具结果、队列和运行策略共同完成。
 
-| 包 | 依赖谁 |
-|---|---|
-| `tui` / `protocol` / `telemetry` / `evals` | 不依赖任何内部包 |
-| `ai` | `telemetry` |
-| `client` | `protocol` |
-| `agent-core` | `ai`、`telemetry` |
-| `server` | `ai`、`protocol` |
-| `session-backends` | `ai`、`agent-core` |
-| `coding-agent` | `agent-core`、`ai`、`client`、`protocol`、`tui` |
+分层同时形成两种接口：向下调用和向上通知。产品层向 Agent 提供模型、消息、工具和运行策略；Agent 执行期间产生事件，由订阅者更新界面、保存会话或触发扩展。模型的文本增量、工具执行进度和最终结果由不同事件承载，因此界面可以在任务结束前呈现过程。
 
-判断一个架构是不是真的解耦，看它**缺哪些依赖**比看它有哪些依赖更准。这里有三处缺失值得注意：
+## 入口与运行组装
 
-- **`agent-core` 不依赖 `tui`。** 循环层不知道界面存在，所以同一个循环能跑在交互、RPC、JSON、SDK 四种场景下，不需要任何 if 判断。
-- **`ai` 不依赖 `agent-core`。** 模型层不知道什么是 Agent、什么是工具循环，可以被任何非 Agent 项目单独拿去用。
-- **`tui` 零依赖。** 17668 行的终端 UI 不引用 Pi 的任何东西，本质是一个可独立发布的组件库。
+### CLI
 
-三层的知识边界：
+`packages/coding-agent/src/cli.ts` 执行启动配置，将命令行参数交给 `main`：
+
+```typescript
+setupCli();
+main(process.argv.slice(2));
+```
+
+`main` 解析参数，建立运行所需的服务、会话和运行模式。当前实现通过 `createAgentSessionFromServices` 传入模型、工具和 `SessionManager` 等选项，再由运行时为所选模式提供会话。
+
+### SDK
+
+SDK 的公开入口 `createAgentSession()` 用于在进程内创建可控制的会话。CLI 和 SDK 在入口参数与运行模式上不同，底层都要组装 Agent、模型运行能力和会话服务。
+
+`packages/coding-agent/src/core/sdk.ts` 创建 `Agent` 时提供初始状态、消息转换、模型请求函数和扩展回调。以下片段省略了缓存、请求选项及其余配置：
+
+```typescript
+const agent = new Agent({
+  initialState: { /* model、tools、messages 等 */ },
+  convertToLlm: convertToLlmWithBlockImages,
+  streamFn: async (model, context, options) => {
+    const requestOptions = buildRequestOptions(options);
+    return modelRuntime.streamSimple(model, context, requestOptions);
+  },
+});
+```
+
+`streamFn` 把模型请求能力传给 Agent；循环调用它，不需要自己创建 Provider 客户端。宿主也可以注入模拟实现测试调度。`convertToLlm` 定义内部消息如何转换为模型接口接受的消息，这使界面专用消息可以被转换或过滤。
+
+## 从输入到模型请求
+
+用户输入经过产品层和 Agent 层，最终进入一次或多次模型请求：
 
 ```text
-  coding-agent   知道：用户、终端、会话文件、API Key、扩展、包
-                 不知道：怎么跟 Anthropic 的 SSE 打交道
-
-  agent-core     知道：消息、工具、模型对象、事件
-                 不知道：API Key 在哪、会话存哪、界面长什么样
-
-  ai             知道：Provider 协议、认证、流式事件、模型能力
-                 不知道：什么是 Agent、什么是工具循环
+AgentSession.prompt(text)
+  ├─ 扩展命令、输入处理和模板展开
+  ├─ 运行中输入 → steering / follow-up 队列
+  └─ 模型与认证检查 → 启动运行
+                             │
+                             ▼
+Agent.prompt(message) → runPromptMessages() → runAgentLoop() → runLoop()
 ```
 
-## 五、循环层看到的世界有多小
+在 `AgentSession.prompt()` 中，扩展命令可能直接处理输入；普通输入经过输入处理器、Skill 和模板展开。运行中收到的新消息根据 `streamingBehavior` 进入 steering 或 follow-up 队列。会话未处于运行状态时，还需要检查模型和认证，才能启动 Agent。
 
-**文件**：`packages/agent/src/agent-loop.ts`
+`Agent.prompt()` 是较低一层的入口。它拒绝并发启动同一个 Agent，将输入规范化为消息，并通过 `runPromptMessages()` 进入循环。运行期间 `Agent` 管理中止信号、活动运行状态和事件监听器。
 
-整个文件 796 行，入口函数是：
+`AgentSession.prompt()` 与 `Agent.prompt()` 之间的边界直接影响输入语义：前者了解扩展命令、资源、认证和产品级队列；后者只接受进入 Agent 的消息并管理执行。如果应用绕过 Session 直接使用 Agent，就需要自行提供这些产品层能力。
 
-```typescript title="packages/agent/src/agent-loop.ts:31" {2-6}
-export function agentLoop(
-  prompts: AgentMessage[],          // 本次新加入的消息（通常是用户输入）
-  context: AgentContext,            // 模型能看到的全部世界
-  config: AgentLoopConfig,          // 产品层插进来的十一个回调
-  signal: AbortSignal | undefined,  // 中止信号，按 Esc 走这里
-  streamFn: StreamFn,               // 怎么跟模型说话，由外部注入
-): EventStream<AgentEvent, AgentMessage[]> {   // 返回事件流，不是 Promise
-```
+### 循环实际接收的数据
 
-高亮的这五个参数没有一个是全局状态：没有 API Key，没有会话对象，没有 UI 句柄，没有配置文件路径。想跑这个循环，把该给的都给它。
+`runPromptMessages()` 将当前消息和工具整理为 `AgentContext` 快照，并传入循环配置、事件处理函数、中止信号和 `streamFunction`。`AgentContext` 的核心结构是：
 
-其中 `context` 是模型能看到的全部世界：
-
-```typescript title="packages/agent/src/types.ts:412" {2,4,6}
-export interface AgentContext {
-  systemPrompt: string;        // 系统提示词，每次请求都带上
-  /** Transcript visible to the model. */
-  messages: AgentMessage[];    // 对话记录，压缩后的结果也是塞在这里
-  /** Tools available for this run. */
-  tools?: AgentTool<any>[];    // 本次运行可用的工具
+```typescript
+interface AgentContext {
+  messages: AgentMessage[];
+  tools?: AgentTool<any>[];
 }
 ```
 
-三个字段。会话怎么存的、上下文被压缩过几次、用户是谁、跑在哪个终端，循环层一概不知。
+系统提示属于消息历史中的系统消息。工具列表保存运行时可执行的工具；Pi 还会比较消息历史中的工具声明与当前工具集，必要时通过系统消息记录工具增删。这使模型看到的工具声明与运行时工具集能够同步，而不是把工具函数本身发送给模型。
 
-这个约束反过来解释了后面几章的很多设计。比如上下文压缩：循环层拿到的 `messages` 就是要发出去的全部内容，压缩**必须发生在进入循环之前**，不可能在循环内部悄悄做（第 06 章）。再比如扩展想改上下文，只能通过 `config` 上的钩子，不能直接改状态（第 09 章）。
+`runAgentLoop()` 将新消息追加到已有消息，发出 `agent_start`、`turn_start` 及初始消息事件，再调用 `runLoop()`。它为本次循环构造消息数组，因此循环对上下文的追加不会通过共用同一个数组直接修改 Agent 的原数组；`Agent` 再根据事件更新自身状态。
 
-## 六、产品层怎么把东西喂进来
+## Agent Loop 与一次 Turn
 
-`AgentLoopConfig` 是产品层往循环层插的一排插头。
+一个 **turn** 是一次助手响应及其关联的工具执行。一次 Agent 运行可以包含多个 turn；当模型给出工具调用时，工具结果进入上下文，后续 turn 才能根据结果继续处理。
 
-**文件**：`packages/agent/src/types.ts:149`
+`runLoop()` 的主要顺序如下：
 
-字段几乎全是回调，列出来就是一张"通用 Harness 要解决的问题清单"：
+1. 根据上一轮结果调用 `prepareNextTurn`，必要时更新上下文、模型或待加入的消息。
+2. 将待处理消息加入上下文；在每次请求前调用 `prepareRequest`。
+3. 通过 `streamAssistantResponse()` 获取助手消息，并检查其停止原因。
+4. 提取工具调用，执行工具并将结果追加到当前上下文。
+5. 调用 `finishTurn`，发出 `turn_end`，再根据工具调用、steering 与 follow-up 决定是否继续。
 
-| 字段 | 解决的问题 | 展开章节 |
+首次请求没有上一轮结果，因此不调用基于上一轮的 `prepareNextTurn`。`prepareRequest` 则在每次对话模型请求之前调用，包括首次请求。二者分别作用于“决定进入下一轮后”和“即将发送请求前”，不应当作同一个钩子。
+
+循环包含内外两层：内层处理工具调用和 steering；内层工作结束后，外层检查 follow-up。`finishTurn` 可明确要求结束或继续。模型响应的 `error` 和 `aborted` 是提前退出路径；当响应因长度限制截断时，工具参数可能不完整，循环会使这些调用失败，而不是直接执行。
+
+例如模型发出一次 `read` 调用：助手消息和工具结果按顺序进入上下文；下一次模型请求据此生成回答。如果工具返回错误，错误结果同样可进入上下文，后续处理取决于循环配置和模型响应。
+
+### 一个工具调用的消息轨迹
+
+以下是教学用的简化轨迹，省略时间、模型元数据和事件字段：
+
+```text
+请求 1 的 messages:
+  system      系统指令、工具声明
+  user        读取 package.json
+
+模型响应:
+  assistant   toolCall(id=call_1, name=read, arguments={path: "package.json"})
+
+工具执行后的 messages:
+  system → user → assistant(toolCall: call_1)
+  → toolResult(toolCallId: call_1, content: 文件内容)
+
+请求 2:
+  使用包含上述助手消息和工具结果的上下文
+  → 模型生成文本回答
+```
+
+工具调用 ID 将结果与助手消息中的请求关联。工具的参数先按工具定义校验，再进入可选的 `beforeToolCall` 和实际执行；执行结果可由 `afterToolCall` 调整，最后转换为工具结果消息。返回给模型的 `content` 与供界面使用的 `details` 是不同字段，不能假设模型能看到所有 UI 元数据。
+
+### 模型请求的边界
+
+`streamAssistantResponse()` 依次执行 `transformContext`、`convertToLlm`、`normalizeContext`，然后用处理后的上下文调用 `streamFunction`。这一步产生的是模型本次请求使用的消息视图；会话文件中的所有条目并不会自动原样发送给模型。
+
+响应流的 `start` 创建部分助手消息；文本、思考或工具调用增量更新该消息，并发出 `message_update`；`done` 或 `error` 将最终消息写回上下文并发出 `message_end`。因此，一条助手消息可以经历多次更新，但持久化和下一轮上下文需要的是完成后的消息。
+
+## 状态、会话与模型上下文
+
+三个结构解决的问题不同：
+
+| 结构 | 管理什么 | 生命周期 |
 |---|---|---|
-| `model` | 用哪个模型 | 08 |
-| `convertToLlm` | Agent 内部消息不等于模型能懂的消息，中间要转换和过滤 | 02 |
-| `transformContext` | 发出去之前还想再改一把上下文 | 05 |
-| `getApiKey` | 凭据不归循环管，要用时再问产品层 | 08 |
-| `shouldStopAfterTurn` | 什么时候该停下来 | 03 |
-| `prepareNextTurn` | 下一轮开始前要做什么 | 03 |
-| `getSteeringMessages` | 用户中途插话 | 03 |
-| `getFollowUpMessages` | 用户排队的后续任务 | 03 |
-| `toolExecution` | 工具并行还是串行 | 04 |
-| `beforeToolCall` | 副作用发生前的唯一拦截点 | 04 / 09 |
-| `afterToolCall` | 结果回填前还想改一把 | 04 / 09 |
+| `AgentState` | 当前模型、工具、消息、流式状态及运行信息 | Agent 实例运行期间 |
+| Session 历史 | 消息及模型切换、压缩等会话条目 | 可持久化并在之后恢复 |
+| 模型上下文 | 当前请求经过转换后交给模型的消息与工具信息 | 每次模型请求 |
 
-被问到"如果让你设计一个通用 Agent Harness，核心难点有哪些"，这十一项就是答案：消息转换、上下文改写、凭据解耦、终止判定、插队与排队、工具调度、副作用前后的拦截。留少了产品层做不了事，留多了循环层就变成了框架。
+`SessionManager` 的条目用 `id` 和 `parentId` 组织成树；当前叶节点决定活动分支。恢复时，`buildSessionContext()` 从分支构建消息。压缩会在后续模型上下文中使用摘要替代较早内容，但原始条目仍保留在会话树中。
 
-`streamFn` 没有放进 `config`，而是作为第五个独立参数，类型是 `StreamFn`（`packages/agent/src/types.ts:28`）。区别在语义：`config` 是这次运行的策略，`streamFn` 是"怎么跟模型说话"这件事本身。抽成参数带来三个结果：测试不用起网络，传一个假的就能跑完整循环；换模型等于换传进来的函数，循环一行不改；Provider 实现可以懒加载，`ai/src/api/` 下有 11 个 `*.lazy.ts`，用到哪家才加载哪家的 SDK。
+Agent 上下文中的消息可能包含内部类型。发送前可经过 `transformContext`，再通过 `convertToLlm` 转换。系统提示在当前消息模型中通过系统消息表达，因此不能直接把旧版文档中的 `AgentContext.systemPrompt` 当作当前接口。
 
-### 脏活都在产品层
+## 事件与运行结束
 
-**文件**：`packages/coding-agent/src/core/agent-session.ts:310`
+Agent 通过 `subscribe()` 向调用方提供事件。`agent_start` 和 `agent_end` 标记一次底层运行，`turn_start` 和 `turn_end` 标记一轮；消息更新与工具执行事件用于显示过程和记录结果。
 
-`AgentSession` 3495 行，是全仓第二大的文件。它的职责就是把散落的产品能力翻译成循环层需要的那五个参数：
+`agent_end` 表示底层循环不会再发出该次运行的事件。`Agent` 仍会等待订阅者处理完事件后清理运行状态；产品层还可能进行重试、压缩或继续排队任务。因而 UI 使用哪个事件标记整体任务完成，必须结合所在运行模式的协议，不能只依据事件名称推断。
 
-```text
-          用户按下回车
-               │
-               ▼
-  ┌──────────────────────────────────────┐
-  │ AgentSession                          │
-  │                                       │
-  │  是斜杠命令吗    → 直接执行，不进循环    │
-  │  是 Skill/模板吗 → 展开成普通文本       │
-  │  上下文超了吗    → 先压缩               │
-  │  有扩展要拦吗    → 触发 input 事件      │
-  │  凭据在哪        → 组装 getApiKey       │
-  │  谁来拦工具      → 组装 beforeToolCall  │
-  │  消息存哪        → 订阅事件写 JSONL     │
-  └───────────────────┬──────────────────┘
-                      │
-                      │ agentLoop(prompts, context, config, signal, streamFn)
-                      ▼
-          ┌────────────────────────┐
-          │ agent-core 只管转圈      │
-          └────────────────────────┘
-```
+Agent 对 `message_start`、`message_update` 和 `message_end` 的处理分别反映当前流式消息的开始、更新和结束；完成后的消息进入 Agent 消息状态。`AgentSession` 收到 `message_end` 后，普通系统、用户、助手和工具结果消息通过 `SessionManager.appendMessage()` 追加到会话。状态更新和持久化依赖同一事件，但发生在不同层，不能把一次增量当作一条完整会话消息。
 
-这条链路的完整拆解是第 02 章的内容。
+监听器会按订阅顺序被等待。一个耗时监听器会延长事件处理和运行结算时间；这提供了明确的处理顺序，也意味着订阅逻辑会影响运行延迟。
 
-很多人第一次读 Pi 源码会问：核心循环这么短，那 12 万行都在干嘛。答案就在这里——Agent 的难点不在循环本身，而在**喂给循环的东西怎么来**。`coding-agent` 的 78768 行里，`modes/interactive/` 占 18264 行，`package-manager.ts` 2699 行，`session-manager.ts` 1715 行，全是"怎么来"的问题。
+## 本地运行与验证
 
-## 七、为什么返回的是事件流
-
-`agentLoop` 的返回值是 `EventStream<AgentEvent, AgentMessage[]>`，不是 `Promise<Result>`。
-
-`AgentEvent`（`packages/agent/src/types.ts:428`）分四层：
+仓库根目录要求 Node.js 22.19 或更新版本。PowerShell 中安装依赖并从源码启动：
 
 ```text
-agent_start ──────────────────────────────────────► agent_end
-    │
-    ├── turn_start ─────────────────────► turn_end      一轮 = 一次模型回复 + 它的工具调用
-    │       │
-    │       ├── message_start
-    │       ├── message_update      流式增量，只有助手消息有
-    │       ├── message_end
-    │       │
-    │       ├── tool_execution_start
-    │       ├── tool_execution_update    工具自己的流式输出
-    │       └── tool_execution_end
-    │
-    └── turn_start ──► ...   模型还要调工具就再转一圈
+cd D:\project\pi
+npm install --ignore-scripts
+npm run hydrate:model-data
+node --import ./packages/coding-agent/src/experimental/source-resolver.ts ./packages/coding-agent/src/cli.ts --help
+node --import ./packages/coding-agent/src/experimental/source-resolver.ts ./packages/coding-agent/src/cli.ts
 ```
 
-分层的意义是订阅者可以只关心自己那一层：TUI 只订阅 `message_update` 里的 `text_delta`，不关心一共转了几轮；成本统计只订阅 `message_end` 的 `usage`，不关心文字内容；权限扩展只订阅工具事件，不关心模型说了什么。
+`hydrate:model-data` 从上游模型目录获取数据，生成被 Git 忽略的 Provider 模型数据；网络不可用时无法完成。第一条 Node 命令输出帮助，确认 CLI 入口和依赖可加载；第二条进入交互模式。真实对话还需要配置可用的模型和凭据。模型请求可能产生费用；`--help` 成功不代表模型已连接。
 
-换成回调风格（`onText`、`onToolCall`、`onDone`……），每加一种订阅者就得加一个回调参数，接口会持续膨胀。事件流的接口是固定的，**扩展发生在订阅侧而不是被订阅侧**。
+如果配置的 npm 镜像缺少包，可在安装命令中指定 `--registry=https://registry.npmjs.org`，不必修改全局配置。数据准备只生成本地忽略文件，不需要手动修改生成的模型源码。
 
-:::warning `agent_end` 不是终点
+循环可以不连接模型服务进行验证。现有测试使用模拟 `streamFn` 返回预设的助手消息，从而检查事件和工具调用。PowerShell 中执行：
 
-类型定义的注释里写明：`agent_end` 是最后一个事件，但 `Agent.subscribe()` 中被 await 的监听器仍然算作本次运行结算的一部分，监听器跑完 Agent 才真正 idle。
+```text
+cd D:\project\pi\packages\agent
+node ../../node_modules/vitest/dist/cli.js --run test/agent-loop.test.ts -t "should handle tool calls and results"
+```
 
-RPC 模式里还额外有一个 `agent_settled`——`agent_end` 之后可能还跟着自动重试、压缩后重跑、队列续跑。做界面时用 `agent_end` 关 loading，会出现转圈停了但字还在往外冒的情况。
+该测试构造工具及两次模拟模型响应，并检查工具结果与事件。它验证的是 Agent 对既定响应的调度，不验证真实 Provider 的协议、认证或模型是否会选择正确工具。通过后可对比同文件中 `should build provider context exclusively from transcript messages`：该用例检查模型请求上下文以消息为来源。
 
-:::
+## 扩展和安全边界
 
-## 八、六条设计取舍
+扩展可以在生命周期节点接收事件，并通过工具调用前后的钩子参与处理。`beforeToolCall` 在参数校验后、实际执行前调用，可阻断调用并返回错误结果；`afterToolCall` 可覆盖执行结果的部分字段。这些钩子适合实现应用层策略和审计。
 
-上面的结构里能反推出 Pi 的取向。每一条都有代价，只讲好处就成软文了。
+扩展与 Pi 进程共享权限。项目资源信任、工具钩子和进程隔离是不同层次的机制：项目资源信任控制资源加载；钩子处理经过该执行链的调用；限制进程、文件系统或网络访问还需要外部隔离机制。
 
-### 核心小，工作流外推
+## 源码索引
 
-官方在 `packages/coding-agent/docs/usage.md:304` 的 Design Principles 里写明，故意不内置 MCP、sub-agents、权限弹窗、plan mode、to-dos、后台 bash，清单在 `usage.md:308`。
-
-换来的是核心稳定、升级不容易炸，每个人装自己需要的东西。代价是开箱即用程度低，很多人第一反应是"这也没有"；同一个能力在社区里有多个互不兼容的实现。
-
-### 单向依赖
-
-换来的是任何一层都能单独测试、单独复用。代价是跨层传信息只能靠参数和回调，写起来比直接读全局状态麻烦。
-
-### 事件驱动而非回调嵌套
-
-换来的是订阅者随便加而接口不膨胀。代价是事件顺序变成了隐式契约——并行工具模式下 `tool_result` 和 `tool_execution_end` 会交错，这件事只写在文档里，类型系统管不住（[第 04 章](./04-tool-system/)）。
-
-### 扩展优于修改
-
-副作用前只留一个钩子 `beforeToolCall`，让扩展层去表达权限、审计、路径保护。
-
-换来的是不改核心就能实现绝大多数需求。代价是扩展和 pi 同权限、是任意代码，不构成沙箱；而且有些语义扩展层根本表达不了，第 09 章列了五类。
-
-### 数据优于分支
-
-Provider 之间的差异不写成 `if (provider === "openai")`，而是收敛成模型对象上的 `compat` 数据。
-
-换来的是加一家厂商等于加一条数据。代价是 `compat` 能统一请求格式，统一不了效果——同一个 prompt 在不同模型上表现仍然不同（第 08 章）。
-
-### 渐进式复杂度
-
-直接跑 `pi` 就是个聊天框，要工具有工具，要扩展有扩展，要 SDK 有 SDK。
-
-换来的是上手成本低。代价是能力藏得深，很多人用了很久都不知道有 `/tree` 和动态工具加载。
-
-## 九、这套架构没解决什么
-
-- **恢复语义。** 现役的 `AgentSession` 没有对崩溃恢复做显式建模。新一代 `AgentHarness` 有完整设计，但编排器的方法体全部未实现，调用会抛 `HarnessNotImplemented`（`packages/agent/src/harness/agent-harness.ts:233`）。
-- **并发单位。** 现役没有"同时跑多个任务"的抽象；新一代有 `AgentLane`，同样没接线。
-- **隔离。** 架构层面完全没有沙箱，扩展与 pi 同权限。隔离只能来自操作系统或容器（第 10 章）。
-- **多 Agent。** 只有 `examples/extensions/subagent/` 一个示例，没有调度、路由、仲裁。
-- **效果一致性。** `compat` 抹平协议差异，抹不平模型能力差异。
-
-:::danger 引用新一代类型时的规矩
-
-`packages/agent/src/harness/` 共 10059 行，其中 `reducer.ts`、`compaction/`、`session/`、`telemetry.ts` 都是**已实现**的；未实现的只有编排器 `agent-harness.ts` 的方法体。
-
-准确的说法是：作者已经把新一代的恢复语义和存储层写完并测试了，还没接上编排器。不能说成"Pi 已经支持断点续跑"。第 07 章给概览。
-
-:::
-
-## 十、未验证与推断
-
-- ✅ 依赖关系、行数统计、`agentLoop` 签名、`AgentContext` 三字段、`AgentLoopConfig` 十一个字段、`harness/` 的实现状态，都是读源码得出并经 `check:refs` 校验
-- ⚠️ 六条设计取舍中，第一条有官方原文出处，其余五条是从代码结构归纳的
-- ⚠️ 每条取舍的"代价"未逐条实测
-- ❌ 一次完整请求的落点尚未实跑打点验证，第 02 章补
-
-## 十一、本章小结
-
-- Pi 做的事：把模型的决定翻译成本机动作，再把结果翻译回文字。这个角色叫 harness
-- 分四层：入口 → 产品层 → 循环层 → 模型层，工具挂在循环层下面
-- 拆包的依据不是代码整洁，是三段职责的**变化频率不同**
-- 判断解耦看缺失的依赖：`agent-core` 不依赖 `tui`，`ai` 不知道 Agent 存在
-- 循环层看到的世界只有三个字段，所以压缩必须在进循环之前完成
-- 通用 Harness 的难点全写在 `AgentLoopConfig` 的十一个回调上
-- 12 万行不在循环里，在"喂给循环的东西怎么来"
-
-:::details 本章源码索引
-
-| 符号 | 位置 |
+| 位置 | 主要内容 |
 |---|---|
-| `agentLoop` | `packages/agent/src/agent-loop.ts:31` |
-| `StreamFn` | `packages/agent/src/types.ts:28` |
-| `AgentLoopConfig` | `packages/agent/src/types.ts:149` |
-| `AgentContext` | `packages/agent/src/types.ts:412` |
-| `AgentEvent` | `packages/agent/src/types.ts:428` |
-| `Agent` 类 | `packages/agent/src/agent.ts:173` |
-| `AgentSession` | `packages/coding-agent/src/core/agent-session.ts:310` |
-| `HarnessNotImplemented` 抛出点 | `packages/agent/src/harness/agent-harness.ts:233` |
-| Design Principles | `packages/coding-agent/docs/usage.md:304`，六项清单在 `usage.md:308` |
-
-:::
-
-## 下一步
-
-→ [02 输入如何进入 Agent](./02-message-journey/) — 最小的 `prompt(text)` 只有三行，产品里它被四类现实撞出了缺口。Pi 用四个阶段补这些缺口。
+| `packages/coding-agent/src/cli.ts` | CLI 入口 |
+| `packages/coding-agent/src/main.ts` | 参数、服务和运行模式组装 |
+| `packages/coding-agent/src/core/sdk.ts` | SDK 与 Agent 组装 |
+| `packages/coding-agent/src/core/agent-session.ts` | 输入、会话和产品层生命周期 |
+| `packages/coding-agent/src/core/session-manager.ts` | 会话条目、分支与上下文恢复 |
+| `packages/agent/src/agent.ts` | Agent 状态、队列和事件订阅 |
+| `packages/agent/src/agent-loop.ts` | 循环、模型请求与工具执行 |
+| `packages/agent/src/types.ts` | Agent 状态、配置与事件契约 |
+| `packages/ai/src/types.ts` | 消息和模型接口类型 |

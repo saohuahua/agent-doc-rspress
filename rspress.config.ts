@@ -2,6 +2,8 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { defineConfig } from 'rspress/config';
 import { pluginShiki, createTransformerHighlight } from '@rspress/plugin-shiki';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import { pluginMermaid } from './mermaid-plugin';
 
 // 站点文档里出现的围栏语言，除了插件内置的那批（js/ts/jsx/tsx/json/css/scss/less/xml/diff/yaml/md/mdx/bash）
@@ -67,6 +69,8 @@ export default defineConfig({
   ],
   markdown: {
     mdxRs: false,
+    remarkPlugins: [remarkMath],
+    rehypePlugins: [rehypeKatex],
     showLineNumbers: true,
   },
   root: path.join(__dirname, 'docs'),
@@ -101,8 +105,8 @@ export default defineConfig({
             { text: '05 流式输出与事件', link: '/learn/05-streaming-and-events' },
             { text: '06 多轮交互与用户插队', link: '/learn/06-multi-turn' },
             { text: '07 副作用与安全边界', link: '/learn/07-side-effects-and-safety' },
-            { text: '08 会话保存与恢复', link: '/learn/08-session-and-persistence' },
-          ],
+            { text: '08 会话保存与恢复', link: '/learn/08-session-and-persistence' }, 
+                    ],
         },
       ],
       '/pi/guide/': [
@@ -162,8 +166,12 @@ export default defineConfig({
           text: 'Pi 原理',
           items: [
             { text: '总览与阅读路线', link: '/pi/principle/' },
-            { text: '01 总体架构与设计哲学', link: '/pi/principle/01-architecture' },
+            { text: '01 pi总体架构与设计哲学', link: '/pi/principle/doc_01_agent_harness' },
+            { text: '02 模型协议与流式事件', link: '/pi/principle/doc_02_model_streaming' },
+            { text: '03 Agent 状态与生命周期', link: '/pi/principle/doc_03_agent_runtime' },
+            { text: '04 循环怎样继续与结束', link: '/pi/principle/doc_04_agent_loop' },
             { text: '05 Context Engineering', link: '/pi/principle/doc_05_agent_context_engineering' },
+            { text: '01 总体架构与设计哲学', link: '/pi/principle/01-architecture' },
             {
               text: '02 输入如何进入 Agent',
               link: '/pi/principle/02-message-journey/',

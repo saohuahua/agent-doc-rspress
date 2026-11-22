@@ -50,7 +50,7 @@ title: Vue
 > **面试回答：**
 >
 > - 最核心的区别是响应式实现：Vue2 用 Object.defineProperty 逐个劫持已有属性，Vue3 用 Proxy 代理整个对象。
-> - 这个改动带来的是能力差异：Vue2 监听不到新增/删除属性、数组下标和 length，所以要靠 $set/$delete 和重写数组方法兜底；Proxy 是对象级的，这些操作天然能拦截，还能覆盖 Map/Set，并且可以懒代理，避免了初始化时全量递归的成本。
+> - 这个改动带来的是能力差异：Vue2 监听不到新增/删除属性、数组下标和 length，所以要靠 `$set`/`$delete` 和重写数组方法兜底；Proxy 是对象级的，这些操作天然能拦截，还能覆盖 Map/Set，并且可以懒代理，避免了初始化时全量递归的成本。
 > - 其次是代码组织：Vue3 引入 Composition API，按业务功能聚合逻辑、支持 composable 复用，TS 类型推导也更自然；但 Options API 仍然保留，不是替代关系。
 > - 还有编译期优化（静态提升、Patch Flags、Block Tree），让运行时只处理动态部分、减少无效比较。
 > - 要澄清一个常见误解：Vue3 仍然有运行时 Diff，编译优化只是缩小了 diff 范围，列表乱序照样要走完整算法，不是「不再 diff」。
@@ -123,7 +123,7 @@ const proxy = new Proxy(obj, {
 > **面试回答：**
 >
 > - 两者的本质差别是拦截粒度：defineProperty 是属性级的，只能在初始化时对「已存在的属性」定义 getter/setter；Proxy 是对象级的，代理整个对象，可拦截 get/set/deleteProperty/has/ownKeys 等操作。
-> - Vue2 之所以监听不到新增和删除属性，是因为新属性根本没有对应的 getter/setter，删除操作也走不到 setter；数组下标赋值和 length 修改同理。所以 Vue2 只能重写数组变更方法、提供 $set/$delete 来兜底。这里要澄清一点：Vue2 对嵌套对象是深度递归观测的，并不是只能处理一层。
+> - Vue2 之所以监听不到新增和删除属性，是因为新属性根本没有对应的 getter/setter，删除操作也走不到 setter；数组下标赋值和 length 修改同理。所以 Vue2 只能重写数组变更方法、提供 `$set`/`$delete` 来兜底。这里要澄清一点：Vue2 对嵌套对象是深度递归观测的，并不是只能处理一层。
 > - Vue3 选 Proxy 的原因有两层：一是能力上能覆盖新增、删除、下标、length、遍历这些操作；二是它可以做懒代理——只在访问到深层对象时才继续代理，避免了 Vue2 初始化时递归遍历整棵 data 的成本，对大型对象更友好。
 > - 另外 Proxy 对 Map/Set 这类集合类型也能通过专门的 handler 支持，这是 defineProperty 做不到的。
 > - 代价也要说清：Proxy 无法被 polyfill，所以 Vue3 放弃了 IE11 支持，这是有意的取舍。

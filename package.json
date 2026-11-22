@@ -17,5 +17,10 @@
     "mermaid": "^11.17.1",
     "rspress": "^1.47.2",
     "unist-util-visit": "^5.1.0"
+  },
+  "devDependencies": {
+    "katex": "0.16.47",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "5.1.1"
   }
 }

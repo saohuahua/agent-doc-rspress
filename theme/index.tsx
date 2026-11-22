@@ -1,5 +1,6 @@
 import Theme from 'rspress/theme';
 import { BlogLayout } from './Blog';
+import 'katex/dist/katex.min.css';
 import './styles.css';
 
 export * from 'rspress/theme';

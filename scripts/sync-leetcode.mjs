@@ -370,19 +370,42 @@ function replaceSection(md, head, transform) {
   return md.slice(0, from) + transform(md.slice(from, to)) + md.slice(to);
 }
 
+/**
+ * 章节可能不存在时使用：找不到标题就原样返回。
+ *
+ * 迁移期间新旧结构并存——已按新结构改造的题目把迁移练习收进「举一反三」，
+ * 不再有「变式分析与错误反例」，未改造的题目仍有该小节。等 100 题全部迁移后
+ * 这个兼容分支即可删除。
+ */
+function replaceSectionIfPresent(md, head, transform) {
+  if (!md.includes(`${head}\n`)) return md;
+  return replaceSection(md, head, transform);
+}
+
 /** 段落 -> 无序列表项；已有块级结构（列表/表格/引用/围栏）的段落原样保留 */
 function toBullets(body, { bySentence }) {
-  return body
+  const blocks = body
     .trim()
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean)
     .flatMap((p) => {
-      if (/^([-|>#`]|\d+\.|:::)/.test(p)) return [p];
+      if (/^([-|>#`]|\d+\.|:::)/.test(p)) return [{ text: p, literal: true }];
       const items = bySentence ? p.split(/(?<=。)/) : [p];
-      return items.map((s) => s.trim()).filter(Boolean).map((s) => `- ${s}`);
-    })
-    .join("\n");
+      const text = items
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => `- ${s}`)
+        .join("\n");
+      return [{ text, literal: false }];
+    });
+  // 相邻的列表段落用单个换行接成一串，块级结构（标题/表格/引用/围栏）前后留空行，
+  // 否则标题会被粘在上一条列表项后面。
+  return blocks.reduce((out, cur, index) => {
+    if (index === 0) return cur.text;
+    const glue = !blocks[index - 1].literal && !cur.literal ? "\n" : "\n\n";
+    return out + glue + cur.text;
+  }, "");
 }
 
 /** `## 复杂度与边界`：按句列表化，并加粗复杂度记号便于扫读 */
@@ -467,7 +490,7 @@ function enrichProblem(md, srcRel) {
   let out = wrapProblemStatement(md, p);
   out = replaceSection(out, "## 复杂度与边界", listifyComplexity);
   out = replaceSection(out, "## 解法复述与检查", listifyCheckQuestions);
-  out = replaceSection(out, "### 变式分析与错误反例", listifyVariants);
+  out = replaceSectionIfPresent(out, "### 变式分析与错误反例", listifyVariants);
   const snippets = PROBLEM_HIGHLIGHTS[pad4(p.id)];
   if (snippets?.length) out = highlightCoreLines(out, srcRel, snippets);
   return out;
@@ -523,6 +546,8 @@ for (const entry of fs.readdirSync(DEST_ROOT)) {
 let copied = 0;
 let assets = 0;
 let rewritten = 0;
+/** 已按新学习闭环结构改造的题目数（以「先独立思考」小节为标记） */
+let migrated = 0;
 
 for (const { srcRel, destRel } of copyList) {
   const srcAbs = path.join(SRC_ROOT, srcRel);
@@ -551,6 +576,7 @@ for (const { srcRel, destRel } of copyList) {
   if (!content.endsWith("\n")) content += "\n";
   fs.writeFileSync(destAbs, content, "utf8");
   copied++;
+  if (problemBySrc.has(srcRel) && content.includes("## 先独立思考")) migrated++;
 }
 
 if (unresolved.length) {
@@ -605,5 +631,6 @@ console.log(`  - 清理旧条目: ${deleted}`);
 console.log(`  - 改写内链的文档数: ${rewritten}`);
 console.log(`  - 章节: ${chapters.length}，题目: ${problemCount}`);
 console.log(`  - 核心行高亮的题目: ${Object.keys(PROBLEM_HIGHLIGHTS).length}`);
+console.log(`  - 已迁移新学习闭环结构: ${migrated}/${problemCount} 题`);
 console.log(`  - 侧栏配置: docs/leetcode/_sidebar.json`);
 console.log("下一步: npm run check && npm run build");
