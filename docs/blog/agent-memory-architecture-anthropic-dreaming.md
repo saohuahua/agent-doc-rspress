@@ -1,6 +1,6 @@
 ---
-title: "Agent 长期记忆架构深度解析：从开源方案到 Anthropic 的 Dreaming"
-description: "对比 Pi、OpenHands、LangGraph、Letta、Mem0、Graphiti 与 OpenClaw 的记忆设计，拆解 Anthropic 的四层记忆体系、Dreaming 机制、实验结果，并给出基于 Pi 的工程落地思路。"
+title: "读 Anthropic 的 Agent Memory 长文：为什么记忆系统的核心不是存，而是“做梦”整理"
+description: "结合 Anthropic 的《The components of agent memory》与日常写 Agent 的踩坑经验，聊清楚记忆分层、Dreaming 离线整理、实验数据背后的反直觉结论，以及在开源框架里怎么对照落地。"
 date: '2026-11-23'
 tags:
   - AI Agent
@@ -13,716 +13,159 @@ categories:
   - AI Engineering
 ---
 
-# Agent 长期记忆架构深度解析：从开源方案到 Anthropic 的 Dreaming
+# 读 Anthropic 的 Agent Memory 长文：为什么记忆系统的核心不是存，而是“做梦”整理
 
-> **一句话概括**：Agent 的长期记忆不是把聊天记录永久保存下来，而是从执行经历中提炼未来有用的知识，并让这些知识能够被检索、验证、更新和淘汰。
->
-> 本文以 Anthropic 2026 年 11 月 6 日发布的 [*The components of agent memory*][anthropic-memory] 为主线。先横向比较开源 Agent 的实现，再拆解四层记忆与 Dreaming（离线记忆巩固），最后讨论如何在 Pi Agent 中落地一套可维护的记忆系统。
+写 Coding Agent 久了都会遇到同一个烦人的问题：昨天刚让它花半小时摸清项目里的 SSE 事件协议，今天新开一个 Session，它又像第一天入职一样从头 `grep` 代码、重新踩一遍旧坑。
 
-## 1. 为什么 Agent 需要记忆？
+最直觉的反应当然是“把聊天记录存下来喂给下一次会话”。但真做过就会发现，跑了几百次会话以后，历史日志里塞满了报错堆栈、猜错的排查方向、临时的 UI 状态和早就推翻的结论。全塞进 Prompt 会把 Context 撑爆，全丢进向量库，召回出来的也往往是一堆自相矛盾的片段。
 
-设想一个编程 Agent：你今天让它处理 SSE 流式消息，明天修复断线重连，后天继续开发会话恢复。
+11 月初 Anthropic 发了一篇工程博客 [*The components of agent memory*][anthropic-memory]（作者是 Lance Martin）。读完之后我最大的感受是，它没有把 Agent Memory 当成一个单纯的“存储 + 检索”问题，而是当成了一个类似人脑在离线睡眠时整理记忆的生命周期问题。整篇文章信息密度很高，里面好几个实验结果也挺反直觉，顺手结合自己平常用 Pi 和看其他开源框架的体会，把核心脉络理一遍。
 
-这几个任务其实相关。它在第一天可能已经弄清楚项目的事件协议，在第二天排查过旧请求覆盖新状态的竞态问题。如果第三天开启新会话时，Agent 又要从头读代码、重新踩坑，它虽然能完成任务，却没有真正积累经验。
+## 先把几个容易混的概念拆开
 
-于是我们自然会想到：**把之前的聊天记录保存下来不就行了吗？**
+聊记忆之前，先把工程里经常被混用的四个词划清楚边界。平时很多人把“对话压缩”或者“向量检索”直接叫成 Agent 记忆，在具体实现里其实差得很远。
 
-问题在于，几百次会话以后，历史记录可能包含大量临时状态、过时结论、失败尝试和互相矛盾的信息。全部放进 Prompt 不现实，全部放进向量数据库也不等于能用对。
-
-因此，真正需要解决的是一个完整链路：
-
-> [!STEPS]
->
-> 1. **捕获**
->
->    过去发生了什么？
->
-> 2. **选择**
->
->    哪些内容值得跨会话保存？
->
-> 3. **组织**
->
->    如何找到相关内容，以及它与其他知识的关系？
->
-> 4. **维护**
->
->    记忆错误、过时或者重复时怎么办？
->
-> 5. **使用**
->
->    下一次 Session 应在什么时候、以什么形式看到这些信息？
-
-Anthropic 的文章值得研究，恰恰因为它把这五个问题放到同一个系统里讨论。
-
-### 1.1 先把 Context、Session、Compaction、Memory 分清楚
-
-这是阅读记忆架构之前最重要的前置知识。
-
-| 概念 | 解决的问题 | 常见实现 |
+| 概念 | 实际在解决什么问题 | 典型形态 |
 |---|---|---|
-| **Context（上下文）** | 模型当前能够看到什么 | System Prompt、Messages、Tool Results |
-| **Session State（会话状态）** | 当前任务做到哪一步，能否中断恢复 | 会话消息、运行状态、Checkpoint |
-| **Compaction（上下文压缩）** | 对话过长时，怎么继续当前任务 | 用摘要替换部分旧消息，保留近期内容 |
-| **Long-term Memory（长期记忆）** | 新会话如何使用过去的经验 | 事实笔记、项目规则、经验库、知识索引 |
+| **Context** | 当前这一轮推理，模型到底能看到哪些 Token | System Prompt、消息历史、工具返回结果 |
+| **Session State** | 任务中途断了怎么接着跑，分支怎么回溯 | 持久化事件日志、Checkpoint |
+| **Compaction** | 对话太长快爆窗口时，怎么保住当前任务不断 | 用摘要替换早期消息，只留近期原文 |
+| **Agent Memory** | 下次开新 Session，怎么直接复用以前的经验 | 经验笔记、项目约定、知识索引 |
 
-以 Pi Agent 为例：
+拿我自己平时看的 Pi Agent 来说，它的 Session 文件把每轮消息和工具事件都记成一棵树，Token 快见底时用 Compaction 把早期的过程压成一段摘要。但这套机制解决的是“当前这个任务别断掉”，新开一个完全不相干的 Session，它照样不知道上周排查过的竞态 Bug 是怎么回事。
 
-- 会话管理器保存用户消息、工具事件和分支信息，这是**会话状态**。
-- Context 构建阶段从这些记录中选出当前交给模型的消息，这是**上下文**。
-- Token 快用尽时，把较早的内容压缩为摘要，这是**Compaction**。
-- 新开一个 Session 后，依然能读到上周调试出来的 SSE 协议约定，这才是**长期记忆**。
+Anthropic 在原文开篇就先下了个严格定义：Agent Memory 指的是 Agent 从任务和用户交互中获得、并且**跨 Session 保留下来供以后读取的上下文知识**。它特意排除了三件事——训练时的权重更新、单次对话里的 In-context Learning，以及长对话里的 Compaction。边界画干净了，后面的架构才好讨论。
 
-注意：**压缩历史不等于长期记忆**。Compaction 的主要目标是帮助当前任务继续执行；长期记忆的目标是让未来不同任务也能复用经验。两者可以协作，但职责不同。[[1]](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sessions.md)[[2]](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/compaction.md)
+## 从生物类比到四层记忆结构
 
-## 2. 开源 Agent 的记忆方案：它们究竟在解决什么？
+原文借用了丹麦哲学家克尔凯郭尔的一句话开场：*Life can only be understood backward, but it must be lived forward.*（生活只能回头看才懂，但必须往前活。）做 Agent 记忆也是这个拧巴劲儿——事件发生的那一刻，模型其实很难准确判断哪句话一个月后还有用；等真出事回头看，当场又往往没留对记录。
 
-先看全局对比。下面这些项目都与记忆相关，但处在不同层次，不能简单用“谁最先进”来排序。
+生物大脑的处理方式是分工。海马体负责在事情发生时快速抓重点、打上显著性标记（salience），保证当下就能用上；真正变成长期知识，很大一部分发生在人睡觉或安静休息的离线时段，海马体反复回放近期经历，慢慢把稳定的模式整合进新皮层。
 
-| 项目 | 主要设计 | 优点 | 需要注意的边界 |
-|---|---|---|---|
-| **Pi** | Session、分支历史、Compaction、文件/扩展 | 简单、透明，适合学习 Agent 运行链路 | 核心 Compaction 不自动等于跨会话知识管理 |
-| **OpenHands** | Event Log + Condenser | 保留执行事件，构建可供模型消费的压缩视图 | 更偏长任务上下文连续性 |
-| **LangGraph** | Checkpointer + Store | 清楚区分 Thread 状态和跨 Thread 数据 | 提供存储原语，不替应用决定记忆策略 |
-| **Letta / MemGPT** | Core Memory + Archival Memory | 让 Agent 主动修改常驻记忆、搜索外部记忆 | 写错记忆、常驻内容膨胀仍需治理 |
-| **Mem0** | 事实提取 + 结构化存储 + 混合检索 | 把记忆作为可集成服务，接入门槛低 | 抽取质量、冲突、生命周期依然关键 |
-| **Zep / Graphiti** | 时序知识图谱 | 擅长实体关系、事实变化和时间查询 | 构图、关系维护和运维更复杂 |
-| **OpenClaw** | 分层文件 + 索引 + Provenance + Dreaming | 关注来源可信度、晋升规则和记忆维护 | 机制多，适合持续运行的助手而非所有小项目 |
-
-### 2.1 Pi：优先保证执行历史可恢复
-
-Pi 将会话记录作为持久化的事件序列。较长任务需要 Compaction 时，系统生成可供后续使用的摘要；原始会话记录并不会因此简单地变成“只有摘要”。
-
-可以把它理解成：
-
-- Session 文件是一份完整工作日志；
-- 当前 Context 是从日志中选择、加工出来的视图；
-- Compaction 是让模型在窗口有限的情况下继续工作。
-
-**这解决了“当前任务怎么继续”，但没有完全解决“不同任务如何共享经验”。**
-
-如果想在 Pi 上做长期记忆，通常还需要在核心 Session 机制之外增加一套提取、保存、检索和维护的流程。Pi 的扩展机制恰好提供了可切入的位置。具体项目应用可能已经有文件式记忆，例如 Pi Chat；不要把应用层能力与 Pi 核心的 Compaction 混为一谈。[[1]](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sessions.md)[[2]](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/compaction.md)
-
-### 2.2 OpenHands：Event Log 与 Condenser
-
-OpenHands 也很重视完整执行事件。Condenser 把历史事件整理成更短的上下文视图，避免长时间编程任务被不断增长的历史拖垮。
-
-有点像视频剪辑：
-
-> Event Log 是原始录像；Condenser 给模型的，是保留必要信息的剪辑版。
-
-它的工程价值是原始记录和模型当前看到的内容可以分开处理。但一个好的剪辑器，不一定就是一个好的长期知识库。
-
-### 2.3 LangGraph：短期状态与长期记忆分成两个接口
-
-LangGraph 的设计尤其适合用来建立正确的概念边界：
-
-- **Checkpointer** 保存 Thread 的状态，支持多轮交互、恢复执行等。
-- **Store** 存储跨 Thread 的数据，可按用户、项目或命名空间组织记忆。
-
-它的文档还借用认知科学的分类：
-
-| 类型 | 典型内容 | 开发场景示例 |
-|---|---|---|
-| Semantic Memory（语义记忆） | 事实、知识、偏好 | 项目采用 Vue3；用户偏好简洁回答 |
-| Episodic Memory（情景记忆） | 一次经历及结果 | 上次修复 SSE 竞态的排查过程 |
-| Procedural Memory（程序性记忆） | 可重复执行的流程和策略 | 遇到同类问题先检查事件顺序和请求 ID |
-
-这些不是必须对应三张表或三个数据库，而是提醒开发者：**“我知道什么”“我经历过什么”“我该怎么做”是不同的信息。**[[3]](https://docs.langchain.com/oss/python/langgraph/persistence)
-
-### 2.4 Letta / MemGPT：让 Agent 主动管理记忆
-
-Letta 的重要设计是把记忆分成不同访问层：
-
-- **Core Memory**：少量高频信息，常驻上下文；
-- **Archival Memory**：体积较大的资料，按需检索；
-- 模型可以调用工具更新 Memory Blocks，而不只被动接收开发者提供的文本。
-
-这和传统 RAG 不太一样：RAG 主要强调检索外部知识，Letta 则进一步把记忆的修改权交给 Agent。
-
-好处是灵活；风险是 Agent 可能把错误推断写成事实。所以只解决“能够修改”还不够，还要解决“能否验证”和“如何回滚”。[[4]](https://docs.letta.com/v1-sdk/memory/memory-blocks)
-
-### 2.5 Mem0：将记忆抽取和检索封装为服务
-
-Mem0 更接近“给现有 AI 应用加一套 Memory API”。常见处理链是：
-
-```mermaid
-flowchart LR
-    A["对话 / 事件"] --> B["提取候选事实"]
-    B --> C["保存事实与元数据"]
-    C --> D["索引 / 混合检索"]
-    D --> E["下一次任务召回"]
-```
-
-它适合用户偏好、多轮客服、长期陪伴、项目知识等场景。
-
-这里有个版本细节：截至本文写作时，Mem0 v3 的开源方案侧重 ADD-only 提取和混合搜索；Graph Memory 不是当前开源 SDK 的默认组成部分，而是平台侧能力。不要混用旧版 Mem0 的开源图记忆介绍与新版能力表。[[5]](https://github.com/mem0ai/mem0/blob/main/docs/migration/oss-v2-to-v3.mdx)
-
-### 2.6 Graphiti：事实不仅有内容，还有时间
-
-假设三个月前用户说“我在 A 公司”，现在说“我换到了 B 公司”。
-
-向量检索可能把两条都找出来，但仅凭“语义相似”不能判断哪一条当前有效。
-
-Graphiti 的思路是建立时序知识图谱，将人物、公司、事件、关系和时间放在一起管理。于是系统不仅能查询“现在在哪”，也能回答“去年在哪”。
-
-如果业务需要复杂关系、多跳查询、事实生效时间，它很有价值；如果只是记住几十条用户偏好，引入完整图谱可能是过度设计。[[6]](https://www.getzep.com/platform/graphiti/)
-
-### 2.7 OpenClaw：给记忆加上来源、权限和晋升规则
-
-OpenClaw 的 Memory Core 是一个很好的工程化参照。它将指令、核心记忆、每日/情景记忆、未来触发意图和整理报告分为不同层次，使用文件与 SQLite 索引管理。
-
-它最值得学习的不是目录命名，而是三个约束：
-
-1. **来源可追溯**：记忆从用户、Agent 自己还是网页/工具结果而来？
-2. **写入有门槛**：不可信内容不能因为被反复召回，就自动晋升为高可信核心记忆。
-3. **维护不阻塞回复**：后台整理失败时，在线 Agent 仍然能正常工作。
-
-OpenClaw 同时把确定性的定时任务、条件触发事项和普通事实记忆分开处理。这一设计比“什么都写进 MEMORY.md”可靠得多。[[7]](https://docs.openclaw.ai/concepts/memory-architecture)
-
-### 2.8 横向对比的结论
-
-上面这些方案可归纳为四种关注点：
-
-- **Pi / OpenHands：任务能否连续执行？**
-- **LangGraph / Letta：记忆怎样分层、怎样存取？**
-- **Mem0 / Graphiti：事实怎样抽取、检索和关联？**
-- **Anthropic / OpenClaw：记忆怎样持续被修正和治理？**
-
-并不是前一种方案“过时”，后一种方案“先进”。一个简单的编程助手可能只需要 Session + 少量项目规则；一个跨月运行的个人 Agent，才可能真正需要记忆生命周期和离线巩固。
-
-## 3. Anthropic 的四层记忆体系
-
-Anthropic 在 [原文][anthropic-memory] 中把 Agent Memory 定义为：Agent 从任务和用户交互中获得，并跨 Session 保留下来的可读取知识。它**不包括**模型权重更新，也不等同于单次会话内的 In-context Learning 或 Compaction。
-
-原文的 Figure 1 给出了一套从原始记录到直接注入上下文的分层结构：
+对应到 Agent 系统，Anthropic 拆出了一个从下往上逐层收窄的四层结构：
 
 ```mermaid
 flowchart BT
-    T["Transcripts<br/>原始对话与执行记录"] --> N["Memory Notes<br/>经验笔记、规则与决策"]
-    N --> W["Memory Representations<br/>Wiki、主题索引、知识关联"]
-    W --> I["Injected Context<br/>开场加载的少量核心记忆"]
-    I --> S["下一次 Session"]
-    D["Dreaming<br/>跨会话校验、纠错、整理、晋升"] -.-> T
+    T["Transcripts（原始对话与工具日志）"] --> N["Memory Notes（会话内随手记的笔记与规则）"]
+    N --> W["Memory Representations（Wiki、主题页与交叉链接）"]
+    W --> I["Injected Context（每次开场预加载的少量核心内容）"]
+    I --> S["新的 Session"]
+    D["Dreaming（离线回放、纠错、整理与晋升）"] -.-> T
     D -.-> N
     D -.-> W
     D -.-> I
 ```
 
-> 注：这是依据 Anthropic Figure 1 重新绘制的概念图，箭头是为了帮助理解，并不表示只能逐层单向写入；Dreaming 可以跨层检查和调整信息。它是研究框架，不能直接当成所有 Claude 产品的完整内部技术实现。
+最底层的 **Transcripts** 是原始账本，对话原文、工具调用参数、报错信息原封不动留在这里。平时根本不需要把它们塞进上下文，它的价值在于“兜底的证据链”。一旦上层的某条总结写偏了，只有回到 Transcript 才能查出当时到底发生了什么。
 
-### 3.1 第一层：Transcripts——保留原始证据
+往上一层是 **Memory Notes**，也就是模型在干活过程中觉得“这个以后用得上”而主动写下来的笔记。再往上当笔记多到几千条、全文搜索开始失灵时，就需要 **Memory Representations**——Anthropic 在实验里重点用的是 Markdown 组织的 Wiki，按主题归类并加上互链，相当于给散落的笔记画一张导航图。
 
-Transcripts 包括对话、工具调用、运行输出、错误信息等，是过去经历最接近原貌的一层。
+最顶层是 **Injected Context**，也就是每次新 Session 启动时自动塞进 Prompt 的一小块常驻上下文。按理说记忆越多越好，但顶层恰恰必须最小。因为这段内容每次都要吃 Token，而且一旦里面混进一条错误结论，等于每次开场都在主动误导模型。Claude Code 的 Auto Memory 就是这个思路：它不会把所有记忆全倒进窗口，而是只预加载 `MEMORY.md` 的前 200 行或 25KB（哪个先到算哪个），把 `MEMORY.md` 当成目录页，细节留在下层文件里按需再去读。
 
-例如，某 Agent 在处理断线重连问题时，先怀疑网络，后来从日志发现真正的原因是旧请求覆盖了新请求状态。
+## 记笔记这件事，本质是在预测未来
 
-如果它第一次就把“网络重试是根因”写成了长期记忆，未来会被误导。只有保留原始记录，后续才能回看：当时做了哪些操作，哪些结果证实了什么，哪些只是猜测。
+Anthropic 原文里有个提法我很认同：**写入一条记忆，本质上是在预测未来的自己会需要什么。** 比如记下一条项目构建命令，是赌下个 Session 还会遇到同样的构建问题，省得再试错一次。
 
-这一层主要追求**完整性和可追溯性**，不要求每次加载进 Context。它可以放在 JSONL、数据库或对象存储中，再建立时间和内容索引。
+为了看不同代际的模型到底能不能做好这个预测，他们在 CL-Bench 1.0 上跑了一组数据库问答任务。玩法很简单：每答一题都是全新的 Session，只有那个 Memory 目录能跨 Session 留下来；答完之后系统会告诉模型正确答案，模型可以自己决定往 Memory 目录里写什么。
 
-### 3.2 第二层：Memory Notes——把经历变成候选知识
+按理说最理想的状态是形成一个闭环：答错了，记下错因和猜测，下个 Session 验证猜想，确认无误后再沉淀成一条明确规则。但实际跑下来，不同模型的表现差距非常大。
 
-比起“发生过什么”，Notes 更关心“以后可能用得上什么”。
+早一点的模型像 Claude Sonnet 4.6，顶多做到“猜几个可能的原因”，Memory 目录里散落着一堆未经验证的猜测，而且它不到一半的次数会主动去翻自己写过的记忆。Opus 4.7 开始懂得把散乱笔记收拢到单个参考文档里，并区分“已验证”和“待确认”。到 Sonnet 5 时，不用额外提醒，它在 9/10 的任务里都会先读记忆再去作答。而从 Opus 5、Opus 5.5 到 Sonnet 5.5，模型才算真正自己跑通了整个学习闭环——笔记里既有验证过的规则、怎么验证出来的依据，还附带明确的避坑警告。
 
-| 一次会话中的信息 | 是否值得长期保存 | 原因 |
+更有意思的是 **Pokémon Red（宝可梦红）** 的长程对比实验，直接暴露了“乱记笔记”有多致命。
+
+研究者对比了跑了大约一万步时的 Sonnet 3.7 和 Fable 5。Sonnet 3.7 的策略是“万一以后有用呢”，每场战斗、每个道具、每个 NPC 都单独开文件存，最后在 **225 个文件夹里写了 413 个文件**，游戏进度只拿到 1 枚徽章。因为游戏状态一直在变，这些文件迅速过期；走到大约第 10,000 步时，它甚至开了第四个“主目录”整理记忆，紧接着连续 17 步新建 6 个文件、删掉 9 个文件，游戏本体一步都没动。
+
+反观 Fable 5，它一共只维护了 **2 个文件夹里的 9 个文件外加一个顶层 `global.md`**，却拿到了 4 枚徽章。它的判断标准很务实：金币有多少、人在地图哪个坐标，每一帧都能从屏幕直接看到，存下来纯属冗余；真正值得写进记忆的是屏幕上读不出来的东西——当前目标、打道馆的路线规划，以及实测有效的操作规则。比如它连续丢了 7 个精灵球没抓到鲤鱼王之后，写下了一条规则：连续 3 球失败就调整按键节奏，在菜单步骤之间多加几次等待，结果改完当场就抓到了。后来的 Opus 5.5 也沿用了这种克制的记法，直接打通了游戏。
+
+关于怎么用 Prompt 引导模型写记忆，Anthropic 还踩出了一个很反直觉的结论：**告诉模型记忆是干嘛的，但别教它具体怎么记。**
+
+对 Sonnet 4.6 这种还不太习惯看旧笔记的模型，Prompt 里加上“回答前先读记忆、并验证你的猜测”，CL-Bench 得分直接从 0.364 翻倍拉到了 0.641。但同样的硬性规定放到 Opus 4.7 和 Opus 5 身上就成了负优化——一旦在 Prompt 里强制要求“只记录失败教训”，这两个模型从记忆里获得的增益反而大幅缩水。当模型自己的判断力足够强时，给足目标说明、把“什么值得记”的决定权还给它，效果比写死一套机械规则好得多。
+
+## 为什么需要 Dreaming 离线整理
+
+即便模型学会了克制地记笔记，在线干活时依然有两个硬伤绕不开：第一，当下正在解 Bug，模型只能看到当前这一个 Session 的局部视野，很容易得出片面结论；第二，边写业务代码边做知识整理会分走注意力，拖慢主任务。
+
+Anthropic 把 Letta 和 UC Berkeley 提出过的 *Sleep-time Compute* 思路搬了过来，叫 **Dreaming**。它不是在训练模型或者改权重，而是趁着 Agent 空闲、没有用户请求的时候，在后台启动一个异步任务，把历史 Transcript 和现有 Memory 翻出来重新过一遍。
+
+原文用几个很扎实的实验演示了 Dreaming 具体能干什么。
+
+最直观的是**对照原始日志纠错**。在宝可梦的月见山（Mt. Moon）关卡，洞口西进东出，西边入口附近有个单向落差，跳下去就回不来。Claude 把洞口的宝可梦中心当成了地标，却在笔记里写反了方向，以为宝可梦中心在东边。于是它每次从宝可梦中心出来就自信宣布“穿过月见山了”，把笔记改成 `Mt Moon DONE`，几步之后一脚踩空掉回原路。因为导航工具看不出落差，它还以为自己往西走过头了，连掉三次之后彻底陷入死循环，最后打算回上一个镇子补给，全程没能走到下一座城市华蓝市。
+
+研究者对着那份写错的记忆目录跑了一遍 Dreaming。模型重新核对了当时的 Session Transcript，发现了宝可梦中心位置的事实错误并改写笔记。拿到修正后的记忆再跑，Claude 在大约 1,935 次动作后顺利穿过山洞到达华蓝市，而未修正记忆和无记忆的对照组全卡死在了山前。
+
+第二个核心能力是**跨大量文档构建导航地图（Wiki）**。Anthropic 用他们收购的 Stainless 公司内部约 35 万份文档（大约 4.2 亿 Token）做了个测试，出了一套 25 道题的评测集。让 Opus 5 跑了 128 个 Dreaming Session，逐步读文档、建 Wiki 页面、合并重复项、核对引用。
+
+| 评测配置 | 得分表现 | 备注 |
 |---|---|---|
-| 成功执行一次普通安装命令 | 通常不需要 | 随时可以再执行 |
-| 当前页面加载了 12 条事件 | 通常不需要 | 瞬时状态，很快过时 |
-| 项目特殊的构建命令 | 值得保存 | 不容易凭常识猜到 |
-| 已验证的 SSE 事件顺序约束 | 很值得保存 | 可以避免重复排查 |
-| 一次未经验证的失败猜测 | 可以保留为经历，但不应当作定论 | 未来可能需要核查 |
+| 只用文件搜索 | 53% | 基线 |
+| 只用 Wiki（2 轮 → 128 轮） | 13% → 48% | 仅靠 Wiki 仍会漏细节 |
+| 初期 Wiki + 文件搜索 | 54% | 初期收益有限 |
+| 完善后的 Wiki + 文件搜索 | 61% | 平均每题省约 20,000 Token |
 
-Anthropic 提出一个很好理解的观点：**保存记忆，有时是在预测未来还需要什么。**
+这个结果很说明问题：**Wiki 替代不了文件搜索，它更像是一张能帮模型少走弯路的地图。** 靠 Wiki 快速定位到相关主题，再配合 Search 去翻原文细节，准确率最高，Token 也省了一大截。在另一组 Harvey LAB 的并购文件测试里，需要跨多份文档做信息拼接和计算的复杂问题，靠 Wiki 辅助能拿到 87% 的得分，纯搜索只有 73%。
 
-Agent 选择记录一条规则，本质上是在判断：未来的自己可能再次遇到它，写下来可以减少重复探索。
+不过原文也没藏着坏消息，直接给出了 Wiki 失效甚至帮倒忙的例子。如果答案就躺在一份单独文档里，关键词一搜就出来，建 Wiki 几乎没有收益；更极端的一次 LAB 任务里，模型建出来的 Wiki 体积比原始文件还大（博尔赫斯短篇里那个“和帝国一样大的 1:1 地图”），不仅没做任何抽象，还凭空多了一套要维护的臃肿文本。
 
-但预测会出错，所以记忆系统不能只记录 `content`，还应尽量保留来源、状态和验证信息。
+Dreaming 剩下的几件事偏日常维护：在第二轮整理时修掉指向不存在页面的死链（原文案例里一轮修了 9 条死链、补出 3 个包含索引在内的新页面），把顶层 `Injected Context` 里变臃肿的细节往下沉并只留链接，以及根据具体任务调整组织方式。
 
-### 3.3 第三层：Memory Representations——为什么需要 Wiki？
+这里面我印象最深的是那个**合同条款并发写入**的案例。一开始几个 Agent 并行整理多份收购合同，往同一张汇总表里写条款，结果互相覆盖，最后评测时 57 项关键合同事实只活下来 41 项（72%）。后来改了指令，让每个 Agent 单独负责一份合同的一页 Wiki，并且明确要求**逐字引用核心条款**而不是强行摘要成表格，结果直接拿到了 57/57（100%）。很多时候记忆系统丢信息，不是模型不够聪明，纯粹是工程上的并发写入和摘要策略设计错了。
 
-当 Notes 只有十几条，全文搜索可能足够。积累到几千条时，问题会变成：
+如果想知道 Anthropic 自己是怎么把这套流程跑起来的，可以看他们配套放出的 [*Dreaming with a dynamic workflow* Cookbook][cookbook]。里面拆了三个角色：Lead Agent 负责调度，多个 Transcript Analyzer 并行去读已经结束的 Session 日志、各自提取主题页，最后交给一个 Memory Organizer 统一做去重、纠错和索引维护。但里面也透了个底：处理大约 50 份长 Session（约 12MB 文本），跑一轮大概花 10 分钟、烧掉 8 美元左右。所以这东西绝对不能每聊两句就触发一次，工程上更现实的是按天批处理或者攒够增量再跑。
 
-- 同一问题的经验散落在哪些会话？
-- 哪些规则彼此依赖？
-- 同一个结论是不是在多个地方重复出现？
-- 应该先看哪个主题，再深入哪个原始记录？
+## 放到现有开源方案里看
 
-Anthropic 的一个解决方式是用 Dreaming 维护 Wiki。Wiki 不是把所有 Notes 原样拼接，而是构建主题页、索引、交叉链接，让 Agent 能顺着知识关系导航。
+把 Anthropic 这套思路和社区里常见的开源 Agent 记忆方案放在一起看，其实能看清大家各自站在哪个生态位上，倒不存在谁淘汰谁的问题。
 
-例如：
+| 方案 | 核心做法 | 真正解决的问题 | 容易忽略的边界 |
+|---|---|---|---|
+| **Pi** | 树形 Session + Compaction | 单任务长对话不断线、可分支回溯 | 不负责跨 Session 经验提炼 |
+| **OpenHands** | Event Log + Condenser | 把冗长执行事件剪辑成紧凑视图 | 侧重单次长任务连续性，不是知识库 |
+| **LangGraph** | Checkpointer + Store | 明确区分 Thread 内状态和跨 Thread 存储 | 只给原语，写入/淘汰策略全靠自己写 |
+| **Letta (MemGPT)** | Core / Archival Memory | 允许 Agent 主动调用工具修改常驻记忆 | 模型写错事实或撑爆 Core Memory 仍需治理 |
+| **Mem0** | 事实提取 + 混合检索 | 把记忆做成开箱即用的 Memory API | 抽取准确度、新旧事实冲突仍是难点 |
+| **Graphiti** | 时序知识图谱 | 记录事实随时间的变化（例如换工作） | 图谱构建和运维重，简单场景杀鸡用牛刀 |
+| **OpenClaw** | 分层文件 + SQLite + Dreaming | 强调来源追溯、可信度晋升门槛、后台整理 | 机制完整但偏重，适合常驻型个人助手 |
 
-```text
-wiki/
-├── _index.md
-├── agent-loop.md
-├── context-management.md
-├── sse-streaming.md
-├── session-recovery.md
-└── tool-execution.md
-```
+像 LangGraph 文档里还会按认知科学把 Store 里的东西分成语义记忆、情景记忆和程序性记忆，提醒开发者“知道什么事实”、“经历过什么事”和“以后该怎么操作”别混在一起存；Graphiti 则专门解决向量检索搞不定的时间线冲突（三个月前说在 A 公司，今天说去了 B 公司，两条语义都很像，到底哪条有效）。而 Anthropic 和 OpenClaw 重点补上的，其实是前面很多方案容易漏掉的**记忆治理层**——写入后错了怎么改、过时了怎么退场、来源不可信怎么办。
 
-`sse-streaming.md` 记录事件协议和状态处理原则，并指向 `session-recovery.md` 中有关快照恢复的经验。Agent 遇到复杂问题时，可以先查看索引，再跳到相关主题和底层证据。
+## 工程上绕不开的几个坑
 
-**Wiki 充当的是“知识地图”，不是原始资料的替代品。**
+读完论文容易热血沸腾，真打算往自己项目里接的时候，有几个现实坑得先想明白。
 
-也不必一看到“关系”就上 Neo4j。Markdown 链接、主题页和稳定的引用 ID，就可以构成实用的知识导航层。
+最要命的是**记忆放大“错误”和“注入”的能力**。向量检索和 Rerank 只能保证你“找得准”，但如果你当初往里写的就是一句拍脑袋的错误推断，检索越准，Agent 在未来犯错就越稳定。更麻烦的是 Prompt Injection：如果 Agent 读了一个带恶意指令的网页，不小心把它记进了 Notes，Dreaming 时又一不小心晋升进了每次开场必加载的 `MEMORY.md`，那就成了永久性的跨会话污染。所以工程上不管怎么做，至少得把外部工具/网页抓回来的内容和用户指令、模型自己验证过的规则在字段上隔离开，不允许未经验证的外部来源自动晋升到顶层上下文。
 
-### 3.4 第四层：Injected Context——最重要的一层应该最小
+其次，**Transcript 可追溯不代表结论永远对**。日志只能证明“昨天某个 API 返回了状态 A”，不代表今天线上那个订单还处于状态 A。能直接通过业务接口查到的实时状态，就老老实实交给数据库和业务 API，别往 Agent Memory 里硬塞；Memory 该留的是那些环境里读不到、踩过坑才换来的经验与约定。顺带一提，确定的工作流和定时任务也别全写成一句自然语言丢进记忆里，该用 Skill 固化的用 Skill，该走 Cron 调度器的走调度器。
 
-既然记忆有帮助，为什么不把整个 Wiki 都塞进 System Prompt？
+另外，**别盲目迷信“全自动建 Wiki”**。前面 Stainless 和 Harvey LAB 的数据已经说得很清楚了：需要跨大量文档综合推理的场景，Wiki 配搜索确实香；但如果你的 Agent 主要面对单文档查询或几十条用户偏好，老老实实做全文检索加一个几十行的规则文件，效果可能比折腾一整套多 Agent Dreaming 流水线还好，成本还低一个数量级。
 
-因为 Context Window 有预算。无关信息会增加成本、干扰关注点；错误信息如果每次开场都自动注入，还会反复污染判断。
+## 如果要在 Pi 里落地，我会怎么做
 
-因此，顶层适合只放：
+如果我现在要给自己的 Pi Agent 或者类似 `pi-web-vue` 这种项目加一套长期记忆，我肯定不会一上来就引入 Neo4j、Mem0 服务或者复杂的向量集群，太重了。
 
-- 很稳定、每次都可能需要的用户或项目事实；
-- 少量已验证的重要规则；
-- 指向下层知识的简短目录。
+第一版直接用 **Markdown 文件 + SQLite FTS5** 就够了。目录结构可以长得跟平常工程文档差不多：底层是 Pi 原生本来就有的 `transcripts/`（JSONL 会话记录），上面加一个 `notes/` 放按主题拆开的项目踩坑经验，一个给用户和核心约束用的 `MEMORY.md`（严格卡死行数或字节上限），再加一个 `memory.db` 用 SQLite FTS5 给它们建全文索引和元数据表。
 
-细节保留在 Wiki 和 Notes 中，必要时再查。
+在每条记忆的元数据里，我只会在意四件事：这条记忆属于哪个项目（`scope`，防止 A 项目的构建约定串到 B 项目里）、从哪次会话哪个事件推导出来的（`source_session` 方便 Dreaming 回查）、来源可信度如何（区分用户明确交代、Agent 实测验证过的规则、以及单纯的临时观察），外加一个状态字段用来把过时结论标成废弃，而不是直接删库留不下痕迹。
 
-Claude Code 的 Auto Memory 就体现了这一原则：文档说明它在开启自动记忆的会话中，最多加载 `MEMORY.md` **前 200 行或 25KB（以先触及的限制为准）**，其余内容按需读取。[[8]](https://code.claude.com/docs/en/memory)
+读写链路也会刻意切开。在线聊天和写代码的时候，主 Loop 尽量少分心，只负责把 Transcript 落盘，顶多在遇到明确的新约定时顺手往候选区丢一条笔记；真正耗 Token 的查重、对照 Transcript 纠错、更新 `MEMORY.md` 索引，全部丢给一个独立的低频离线脚本（或者每天晚上跑一次的定时任务），跑挂了也不影响白天正常对话。读取时开场只挂小体积的 `MEMORY.md`，真需要查细节再去调用 FTS5 搜索工具按需拉取，遇到关键约束或者前后矛盾的记录再顺着 `source_session` 回头看原始对话。
 
-可以用四句话理解整个分层：
+至于这套东西到底值不值得继续往后加 Embedding 混合检索甚至 Wiki 关联，全靠同一套真实任务题库跑消融对比说了算——分别测“无记忆”、“Notes + 全文搜索”、“加上离线 Dreaming”三组结果。如果加了复杂度之后准确率没涨、Token 反而烧得更多，果断砍掉就是了。
 
-> **Transcripts**：当时到底发生了什么？  
-> **Notes**：从中学到了什么？  
-> **Wiki**：这些知识如何关联、从哪里找到？  
-> **Injected Context**：下一次开始时必须先知道什么？
-
-## 4. Dreaming：记忆系统为什么需要“离线整理”？
-
-四层结构解决了“存放与访问”；Dreaming 解决了“维护与演化”。
-
-Dreaming 并不意味着模型真的睡觉，也不是训练模型、修改权重。这里指的是：**在用户交互之外，回看历史记录和现有记忆，识别错误、补充关联、去重、整理结构，并决定什么信息值得进入未来的核心上下文。**
-
-它与 Letta、UC Berkeley 提出的 [Sleep-time Compute][sleep-time] 思想有联系：把一部分昂贵的计算放到空闲阶段，而不是每次用户提问时都重新做一遍。
-
-### 4.1 在线 Agent 与离线 Dreaming 分工
-
-```mermaid
-flowchart TD
-    U["用户请求"] --> A["在线 Agent Loop"]
-    A --> O["回答 / 工具调用"]
-    A --> T["追加 Transcript"]
-    A --> N["写入候选 Notes（可选）"]
-    T --> D["Dreaming Worker"]
-    N --> D
-    D --> V["核查来源与新旧事实"]
-    V --> K["合并 / 纠错 / 构建 Wiki"]
-    K --> P["晋升或下沉核心记忆"]
-    P --> M["下一次 Session 的记忆检索与注入"]
-    M --> A
-```
-
-在线流程更重视响应速度和当前任务；离线流程更重视回顾、整理和质量控制。这样可以避免在主请求路径中执行复杂的全量记忆维护。
-
-### 4.2 Dreaming 的五类核心工作
-
-**第一，纠错。**
-
-如果过去的 Notes 包含错误位置、过时参数或未经证实的推断，Dreaming 可以回到原始 Transcript 核查，修改记忆，并保留修订依据。
-
-**第二，合并。**
-
-五次不同会话里都出现了 SSE 请求竞态，Dreaming 可以把零散经历整理为一条可复用的原则，同时保留各次案例链接。
-
-**第三，组织。**
-
-建立主题页、关联链接和索引，修复断链，让知识库不再是孤立片段的集合。
-
-**第四，晋升与下沉。**
-
-常用且经过验证的知识进入核心上下文；低频细节回到 Notes 或 Wiki。重要性不等于最近出现频率：一次性安排可能很新，却不该永久保留；旧的项目约定可能仍然关键。
-
-**第五，针对目标做记忆整理。**
-
-编程 Agent 需要保留接口约定、运行结果和踩坑经验；法律 Agent 可能必须保留合同条款的精确措辞。不能用同一个“帮我总结一下”Prompt 处理所有记忆。
-
-### 4.3 Dreaming 为什么不只是“自动摘要”？
-
-自动摘要只是把信息写短。Dreaming 还可能改变知识结构、发现冲突、回查证据、补链接和调整未来的加载策略。
-
-更准确的理解是：**Dreaming 是一套离线记忆维护工作流，摘要只是其中一种操作。**
-
-## 5. Anthropic 的实验：记忆到底带来了什么收益？
-
-这篇文章的重要性不只在于提出了概念，它还用不同类型的任务检验了这些机制。但看数据时需要区分：哪些是同一条件下的对比，哪些只是展示现象的案例。
-
-### 5.1 CL-Bench：记忆如何帮助跨会话学习？
-
-在 CL-Bench 1.0 的数据库问答任务中，Agent 每次回答后获知正确答案，然后进入全新的 Session。只有 Memory 目录可以跨 Session 保留。
-
-原文 Figure 3 给出的平均奖励如下（**指标是 Mean Reward，不是百分比准确率**）：
-
-| 模型 | 无记忆 | 有记忆 | 变化 |
-|---|---:|---:|---:|
-| Claude Opus 5.5 | 0.655 | 0.838 | +0.183 |
-| Claude Sonnet 5.5 | 0.644 | 0.833 | +0.189 |
-| Claude Opus 5 | 0.564 | 0.828 | +0.264 |
-| Claude Opus 4.7 | 0.383 | 0.700 | +0.317 |
-| Claude Sonnet 5 | 0.306 | 0.610 | +0.304 |
-| Claude Sonnet 4.6 | 0.330 | 0.364 | +0.034 |
-
-数据来源：[Anthropic 原文 Figure 3][anthropic-memory]。
-
-同样有 Memory 目录，不同模型差异很大：
-
-- 较弱模型会记录未经验证的猜测，甚至不主动读取旧记忆；
-- 更强的模型能够把错误答案、验证过程和正确规则形成闭环；
-- 对 Sonnet 4.6 增加“先读取记忆、验证猜测”的指令后，得分从 **0.364 提升到 0.641**；
-- 但对更强模型强制要求“只记录失败”，反而会削弱记忆带来的收益。
-
-结论不是“Prompt 越详细越好”，而是：**记忆能力取决于模型的判断能力，也取决于是否有适合它的操作约束。**
-
-### 5.2 Pokémon：记忆越多，Agent 越聪明吗？
-
-研究者比较了两次进行到大约 10,000 步的游戏运行：
-
-| 指标 | Sonnet 3.7 | Fable 5 |
-|---|---:|---:|
-| 记忆文件 | 413 | 10（含顶层 `global.md`） |
-| 文件夹 | 225 | 2 |
-| 游戏进度 | 1 枚徽章 | 4 枚徽章 |
-
-Sonnet 3.7 把遭遇、物品、战斗等信息大量写入文件。问题是这些状态不断变化，文件也很快过时，系统反而消耗大量时间维护记忆。
-
-Fable 5 更倾向于保留目标、计划和已经测试的规则；当前位置、金币等可以直接从游戏环境读取的信息，不必反复持久化。
-
-**有用的不是“存了多少”，而是“存了多少未来不容易重新得到的信息”。**
-
-注意：这是不同模型的单次运行对比，并不能证明仅把记忆文件从 413 减为 10 就必然带来更多徽章。它主要展示记忆选择策略的差异。
-
-### 5.3 Dreaming 纠错：错误记忆能否被修正？
-
-Pokémon 的月见山（Mt. Moon）实验更直接地验证 Dreaming 的作用。
-
-Claude 错误记住了某个地标的位置，因此多次走到单向落差处，又回到原来的路线。研究者让 Dreaming 对照 Transcript 检查记忆，发现位置笔记错误并修改。
-
-原文 Figure 8 的结果是：**修正记忆后的运行在约 1,935 次累计动作时抵达目标城市**；未修正记忆的运行、无记忆的运行均未在该实验中达到目标。[[9]](https://www.anthropic.com/research/components-of-agent-memory)
-
-这个实验真正证明的是：**保存错误经验不如不保存；而能从证据中纠错的记忆更有价值。**
-
-不过这里的“原始记录是真相”也有边界：Transcript 可以说明工具当时返回什么，不保证外部世界的数据一直正确。对真实业务数据，仍需连接权威数据源校验。
-
-### 5.4 大规模企业文档：Wiki 与搜索能否互补？
-
-Anthropic 在约 **35 万份、4.2 亿 Token** 的企业文档上测试 Wiki 构建。研究者让多个 Session 逐步探索资料、建立页面、合并和修订，最终用 25 个问题评测。
-
-| 方案 | 评测表现 |
-|---|---:|
-| 仅文件搜索 | 53% |
-| 初期 Wiki + 文件搜索 | 54% |
-| Wiki 逐渐完善后 + 文件搜索 | 61% |
-| Wiki 逐渐完善后、仅使用 Wiki | 最佳约 48% |
-
-同时，Wiki + 搜索在该实验中每道题大约节省 **20,000 Token**。[[9]](https://www.anthropic.com/research/components-of-agent-memory)
-
-这组结果非常关键：
-
-- Wiki 能帮助 Agent 找到相关主题，尤其适合跨文档综合问题；
-- 原始搜索仍然重要，能取回 Wiki 可能省略的细节；
-- **Wiki 不能简单替代搜索，它更像一张有用的导航地图。**
-
-另一个企业并购问题测试中，对于需要组合多份文档、判断或计算的项目，使用 Wiki 的表现约 **87%**，仅用搜索约 **73%**；但对答案集中在单份文档里的简单查询，Wiki 不一定有额外收益。[[9]](https://www.anthropic.com/research/components-of-agent-memory)
-
-### 5.5 Wiki 也可能变成负担
-
-原文还给了一个反例：10 份原始文档共有约 **115KB**，整理出来的 Wiki 却有 **203KB**，相当于原文的 **1.77 倍**。
-
-这不是有效的知识抽象，而是又造了一套更大的资料。
-
-因此应该评估的不是 Wiki 页面数、链接数，而是：
-
-- 是否减少检索步骤？
-- 是否降低回答成本？
-- 是否提高复杂问题的准确性？
-- 更新和纠错要花多少钱？
-
-### 5.6 Dreaming 可以补齐缺失的链接，并修复写入问题
-
-在一个 Wiki 维护案例中，第二轮 Dreaming 修正了 **9 个指向不存在页面的链接**，并新增 **3 个页面**（包含索引）。
-
-另一个合同分析案例更具有工程启发：多个 Agent 并行修改同一个条款汇总文件，发生覆盖，最终仅保留 **41/57** 项关键事实。调整为“每份合同由一个 Agent 单独维护页面，并准确保留条款”后，达到 **57/57**。[[9]](https://www.anthropic.com/research/components-of-agent-memory)
-
-注意这不是单纯依靠“更强模型”得到的结果，而是**修改了写入组织方式和任务约束**。对多 Agent 记忆系统而言，并发控制和信息完整性跟模型能力同样重要。
-
-## 6. 从论文思路走向工程：Anthropic Cookbook 怎么实现 Dreaming？
-
-研究文章不等于完整的生产系统说明。更具体的实现可以参考 Anthropic 官方 [*Dreaming with a dynamic workflow* Cookbook][cookbook]。
-
-该示例把记忆整理拆成三个角色：
-
-| 角色 | 职责 |
-|---|---|
-| Lead Agent | 生成并调度工作流 |
-| Transcript Analyzer | 逐份阅读会话记录，提炼可复用知识 |
-| Memory Organizer | 在分析结束后整理整个 Memory Store，合并重复和维护索引 |
-
-流程是：
-
-```mermaid
-flowchart TD
-    A["导出已完成的 Session"] --> B["Transcript 文件"]
-    B --> C["Lead Agent 调度"]
-    C --> D1["Analyzer A"]
-    C --> D2["Analyzer B"]
-    C --> D3["Analyzer C"]
-    D1 --> E["主题记忆页"]
-    D2 --> E
-    D3 --> E
-    E --> F["Organizer 去重、纠错、补索引"]
-    F --> G["Memory Store / _index.md"]
-    G --> H["后续 Session 只读挂载"]
-```
-
-这里有几个非常实用的工程细节。
-
-**其一，在线执行与离线整理分开。** 用户任务不需要等待整个知识库重建。
-
-**其二，分析阶段和组织阶段分开。** 多个 Analyzer 并发提取经验，再由 Organizer 统一处理知识结构问题。
-
-**其三，原始 Transcript 属于数据，不是指令。** 日志里可能包含网页文本、恶意 Prompt、工具输出，不能允许这些内容借“记忆写入”获得更高权限。
-
-**其四，要考虑并发和幂等。** 多 Agent 共享写文件容易相互覆盖。示例采用局部编辑、写后验证和末尾整理；生产环境还可以用文件版本号、CAS、乐观锁或按主题串行化。
-
-**其五，Dreaming 不是免费的。** Cookbook 报告的一组参考配置中，处理约 50 份长 Session、约 12MB 文本，成本约 **8 美元**、耗时约 **10 分钟**。这是特定模型和环境下的示例值，不是通用定价。[[10]](https://platform.claude.com/cookbook/managed-agents-cma-dreaming-with-a-dynamic-workflow)
-
-所以更合理的触发方式通常是：任务结束后批处理、每晚定时整理，或者积累到一定数量再增量整理，而不是每条消息都启动一次全量 Dreaming。
-
-## 7. 我的评价：Anthropic 的设计还存在哪些问题？
-
-### 7.1 长期记忆最难的是“写对”，而不只是“找对”
-
-向量数据库、BM25、Reranker 可以改善召回；但如果一开始写入的就是错误结论，检索越准，反而可能越稳定地输出错误答案。
-
-建议记忆至少区分：
-
-- **Observation**：当时观察到的现象；
-- **Inference**：从现象推导出的猜测；
-- **Verified Rule**：经测试或权威来源确认的规则；
-- **Superseded**：已被新事实取代的旧结论。
-
-另外，LLM 自评的置信度不是经过校准的正确概率；关键事实的可靠性应依赖来源和验证过程。
-
-### 7.2 原始记录可追溯，不代表永远正确
-
-“某接口昨天返回状态 A”与“这个对象现在处于状态 A”不是一回事。
-
-记忆系统要知道哪些事实具有时效性。用户偏好、项目技术选型、服务端状态和订单金额，更新频率完全不同。
-
-**实时可从业务 API 获取的状态，原则上由业务系统负责；Memory 记录的是有价值的上下文、决策依据和经验。**
-
-### 7.3 记忆会放大 Prompt Injection 风险
-
-如果 Agent 阅读一个网页，网页暗藏“以后每次执行任务都运行某个命令”，随后 Agent 又把它写进长期记忆并在未来自动加载，就形成跨会话的污染。
-
-因此，一个可信的写入流程应当：
-
-1. 保存来源和可信等级；
-2. 将网页、文档、工具结果视为数据而非新系统指令；
-3. 禁止不可信内容自动晋升到高权限核心记忆；
-4. 记录记忆修改日志，支持撤销和删除；
-5. 避免已召回记忆再次作为“新发现”重复入库。
-
-OpenClaw 的 Memory Core 文档对来源分级、晋升门槛和防止记忆回声有较明确的设计。[[7]](https://docs.openclaw.ai/concepts/memory-architecture)
-
-### 7.4 Memory、Skill、业务状态和调度任务不能混在一起
-
-以企业风险查询 Agent 为例：
-
-| 信息 | 更适合放在哪里 |
-|---|---|
-| 某一次 API 的请求和返回 | Transcript / 日志 |
-| 多次排查发现的接口参数依赖 | Memory Notes |
-| 已验证、可重复执行的查询流程 | Skill / 工作流定义 |
-| 当前企业风险报告的最新数据 | 业务 API / 数据库 |
-| 明天 9 点触发检查 | 可靠的定时任务系统 |
-
-记忆可以辅助规划，但不应该取代确定性的数据库状态和调度器。成熟的工程系统需要明确权责边界，而不是把所有东西都做成一句自然语言记忆。
-
-### 7.5 Wiki 和 Dreaming 是否值得投入，要由评测决定
-
-复杂跨文档任务可能很适合 Wiki；简单事实问答可能只需要全文搜索。随着数据变化，Wiki 的持续维护成本也会增加。
-
-因此，不能因为文章里的某个实验增益明显，就认为所有 Agent 都应该建设四层记忆和后台 Dreaming。
-
-## 8. 实践方案：基于 Pi 搭一套轻量长期记忆系统
-
-如果目标是理解 Agent 架构，并做出能够演示、能够评测的工程项目，我更推荐**从简单可控的实现起步**，不要一开始就把 Mem0、Neo4j、向量数据库和多 Agent 调度器全堆进去。
-
-### 8.1 推荐架构
-
-```mermaid
-flowchart TB
-    U["User"] --> P["Pi Agent Loop"]
-    P <--> S["Session Manager / Compaction"]
-    P --> R["Memory Recall"]
-    R --> M["Core Memory + 检索接口"]
-    P --> T["Transcript / Tool Events"]
-    T --> Q["候选记忆队列"]
-    Q --> D["Dream Worker"]
-    T --> D
-    D --> V["去重 / 冲突检查 / 来源核实"]
-    V --> K["Notes + Wiki + Index"]
-    K --> M
-```
-
-Pi 负责 Agent Loop 和任务执行；Memory Service 负责跨会话知识；Dream Worker 负责低频维护。这样不必为长期记忆重写整个 Agent Runtime。
-
-### 8.2 第一版目录
-
-```text
-agent-memory/
-├── transcripts/
-│   ├── session-001.jsonl
-│   └── session-002.jsonl
-├── notes/
-│   ├── project-decisions.md
-│   ├── known-issues.md
-│   └── tool-experience.md
-├── wiki/
-│   ├── _index.md
-│   ├── sse-streaming.md
-│   └── session-recovery.md
-├── MEMORY.md
-└── memory.db
-```
-
-第一版用 **Markdown + SQLite FTS5** 就可以实现文件可读、元数据管理和全文搜索。只有当全文检索的效果不够，才引入 Embedding 和混合检索；只有当复杂实体关联成为核心需求时，才考虑图数据库。
-
-### 8.3 单条记忆的数据模型
-
-```json
-{
-  "id": "mem_001",
-  "scope": "project:example-app",
-  "type": "verified_rule",
-  "content": "项目级、已验证的可复用规则",
-  "source_session": "session_123",
-  "source_event_ids": ["evt_17", "evt_23"],
-  "origin": "agent_derived",
-  "status": "active",
-  "observed_at": "2026-11-20T10:00:00Z",
-  "verified_at": "2026-11-21T11:00:00Z",
-  "review_after": null,
-  "supersedes": null
-}
-```
-
-这些字段不是装饰：
-
-- `scope` 防止 A 项目的经验误用到 B 项目；
-- `source_session` / `source_event_ids` 可以追溯依据；
-- `origin` 区分用户指令、Agent 推断和外部不可信内容；
-- `status`、`review_after`、`supersedes` 支持过时与冲突处理。
-
-### 8.4 写入流程怎么做？
-
-**在线阶段**只做低成本工作：保存执行事件，识别少量候选经验，不要求每轮都总结全部历史。
-
-**离线阶段**由 Dream Worker 处理：读取新增记录、核对来源、发现重复、确认冲突、改写主题页和核心索引。
-
-一个实用的候选记忆判定可以问：
-
-1. 这条信息以后是否可能复用？
-2. 下一次能不能直接从当前环境或业务 API 重新获取？
-3. 它是事实、推测，还是经过测试的规则？
-4. 过时的风险大不大？
-5. 是否有明确的适用项目和证据？
-
-要避免“记住每个工具结果”，更不能让模型任意把不可信内容提升成长期指令。
-
-### 8.5 读取流程怎么做？
-
-建议采取**少量预加载 + 按需查找 + 必要时回查原始证据**：
-
-```mermaid
-flowchart TD
-    A["新 Session"] --> B["载入少量核心记忆和目录"]
-    B --> C["理解当前任务"]
-    C --> D{"是否需要旧经验？"}
-    D -- "否" --> H["正常执行"]
-    D -- "是" --> E["按 scope / 主题 / 关键词检索"]
-    E --> F{"事实是否关键或有冲突？"}
-    F -- "是" --> G["回查原始 Transcript / 业务来源"]
-    F -- "否" --> H
-    G --> H
-```
-
-这里还应设置 Token 预算和超时：记忆检索失败时可以降级，不要让普通用户请求因为记忆服务故障而长时间挂起。
-
-### 8.6 按三个版本逐步实现
-
-| 版本 | 做什么 | 验证什么 |
-|---|---|---|
-| **V1：记住并找回** | Session 持久化、Notes、SQLite 搜索、来源链接 | 跨 Session 的事实和项目规则能否正确召回 |
-| **V2：自动维护** | 候选提取、去重、冲突处理、过期检查、Dreaming | 是否减少错误记忆和重复内容 |
-| **V3：知识地图** | Wiki、交叉链接、混合检索、核心记忆晋升 | 跨文档任务是否更准、更省 Token |
-
-### 8.7 最低限度要做的评测
-
-不要只展示“Agent 能记住我喜欢什么”，这不足以说明架构的价值。至少对比四种配置：
-
-1. 无记忆；
-2. 简单 Notes + 检索；
-3. Notes + Dreaming；
-4. Notes + Dreaming + Wiki。
-
-尽量用同一套测试问题，覆盖：
-
-- **事实召回**：跨会话能否找到以前确认的信息；
-- **更新与冲突**：新事实能否替代旧事实；
-- **复杂任务**：多个会话中的经验能否组合使用；
-- **安全性**：不可信内容能否被错误晋升；
-- **成本与延迟**：读取 Token、检索耗时、离线维护费用；
-- **可维护性**：记忆能否审计、撤销、删除和重新构建。
-
-如果 V3 比 V2 更贵、效果却没有明显提升，那就不应该继续堆复杂度。
-
-## 9. 最后总结：Agent 记忆的核心不是存储，而是生命周期
-
-从这些开源框架到 Anthropic 的研究，可以把 Agent 记忆能力理解成四个维度：
-
-| 维度 | 核心问题 | 典型机制 |
-|---|---|---|
-| **保存** | 历史能否完整保留并恢复？ | Session、Event Log、Checkpoint |
-| **检索** | 未来能否找回相关知识？ | Store、FTS、Embedding、混合搜索 |
-| **组织** | 知识能否形成结构与关联？ | 主题页、Wiki、知识图谱 |
-| **巩固** | 记忆能否持续保持可信与有用？ | Dreaming、纠错、过期、晋升与淘汰 |
-
-这不是严格的历史发展阶段，而是不同系统可以组合实现的四类能力。
-
-Anthropic 这篇文章最有价值的启发有三个：
-
-**第一，记忆是选择，不是堆积。** 能从环境随时获取的实时状态，通常不值得反复保存；真正有价值的是难以重新发现的经验、决策依据和验证过的规则。
-
-**第二，记忆需要维护。** 一个只会追加、不做验证、不处理过时事实的系统，运行越久未必越可靠。Dreaming 给出的是把纠错、整理和知识重组从在线交互中拆出来的方向。
-
-**第三，记忆要分层使用。** 顶层提供少量关键上下文，Wiki 负责导航，Notes 保存经验，Transcripts 保留证据。高质量的记忆不是每次给模型最多的内容，而是在合适的时机给它正确的内容。
-
-对 Agent 开发者来说，真正重要的能力并不是会调用一个 `memory.add()` API，而是能回答清楚：**什么值得记、由谁验证、何时过期、怎么检索、如何纠错，以及错误写入会给未来任务带来什么风险。**
-
-这才是长期运行的 Agent 从“每次重新开始”走向“持续积累经验”的关键。
+说到底，做 Agent 记忆最忌讳一上来就堆基础设施。从 Anthropic 这篇和几个开源项目的演变能看出来，真正决定记忆系统好不好用的，从来不是你接了多贵的向量库，而是你有没有想清楚：**哪些东西压根不该存，存错的怎么靠原始日志纠回来，以及如何保证顶层注入的那几百行上下文永远干净。**
 
 ## 参考资料
 
-以下以官方研究、文档与项目仓库为主。部分项目更新较快，具体 API 和默认能力应以你使用的版本为准。
-
-1. [Pi — Sessions](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sessions.md)
-2. [Pi — Compaction](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/compaction.md)
-3. [LangGraph — Persistence and Memory](https://docs.langchain.com/oss/python/langgraph/persistence)
-4. [Letta — Memory Blocks](https://docs.letta.com/v1-sdk/memory/memory-blocks)
-5. [Mem0 — OSS v2 to v3 Migration](https://github.com/mem0ai/mem0/blob/main/docs/migration/oss-v2-to-v3.mdx)
-6. [Zep — Graphiti](https://www.getzep.com/platform/graphiti/)
-7. [OpenClaw — Memory Architecture](https://docs.openclaw.ai/concepts/memory-architecture)
-8. [Claude Code — How Claude Remembers Your Project](https://code.claude.com/docs/en/memory)
-9. [Anthropic — The Components of Agent Memory](https://www.anthropic.com/research/components-of-agent-memory)
-10. [Anthropic Cookbook — Dreaming with a Dynamic Workflow](https://platform.claude.com/cookbook/managed-agents-cma-dreaming-with-a-dynamic-workflow)
-11. [Letta / UC Berkeley — Sleep-time Compute (arXiv)](https://arxiv.org/abs/2504.13171)
-12. [OpenHands — Repository](https://github.com/All-Hands-AI/OpenHands)
+1. [Anthropic — The components of agent memory](https://www.anthropic.com/research/components-of-agent-memory)
+2. [Anthropic Cookbook — Dreaming with a dynamic workflow](https://platform.claude.com/cookbook/managed-agents-cma-dreaming-with-a-dynamic-workflow)
+3. [Claude Code — How Claude remembers your project](https://code.claude.com/docs/en/memory)
+4. [Letta / UC Berkeley — Sleep-time Compute (arXiv)](https://arxiv.org/abs/2504.13171)
+5. [Pi — Sessions](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sessions.md) & [Compaction](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/compaction.md)
+6. [LangGraph — Persistence and Memory](https://docs.langchain.com/oss/python/langgraph/persistence)
+7. [Letta — Memory Blocks](https://docs.letta.com/v1-sdk/memory/memory-blocks)
+8. [Mem0 — OSS v2 to v3 Migration](https://github.com/mem0ai/mem0/blob/main/docs/migration/oss-v2-to-v3.mdx)
+9. [Zep — Graphiti](https://www.getzep.com/platform/graphiti/)
+10. [OpenClaw — Memory Architecture](https://docs.openclaw.ai/concepts/memory-architecture)
+11. [OpenHands — Repository](https://github.com/All-Hands-AI/OpenHands)
 
 [anthropic-memory]: https://www.anthropic.com/research/components-of-agent-memory
 [cookbook]: https://platform.claude.com/cookbook/managed-agents-cma-dreaming-with-a-dynamic-workflow
-[sleep-time]: https://arxiv.org/abs/2504.13171
