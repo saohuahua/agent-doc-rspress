@@ -19,6 +19,12 @@ html:root {
   --rp-c-brand-tint: var(--rp-c-bg-mute);
   --rp-c-text-code: var(--rp-c-text-1);
   --rp-c-text-code-bg: var(--rp-c-bg-mute);
+  --rp-c-accent: #2f5d8c;
+  --rp-c-accent-soft: rgb(47 93 140 / 8%);
+  --rp-c-accent-border: rgb(47 93 140 / 26%);
+  --rp-font-family-base:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
 }
 
 html.dark {
@@ -34,6 +40,9 @@ html.dark {
   --rp-c-divider-light: #383838;
   --rp-c-link: var(--rp-c-text-1);
   --rp-c-text-code: var(--rp-c-text-1);
+  --rp-c-accent: #7aa7d6;
+  --rp-c-accent-soft: rgb(122 167 214 / 12%);
+  --rp-c-accent-border: rgb(122 167 214 / 28%);
 }
 
 :where(.rspress-nav, .rspress-nav-screen, .rspress-doc, .personal-home) :focus-visible {

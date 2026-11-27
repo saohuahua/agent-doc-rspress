@@ -2,6 +2,7 @@
   width: min(800px, 100% - 40px);
   margin-inline: auto;
   padding-block: clamp(44px, 8vw, 90px) 96px;
+  font-family: var(--rp-font-family-base);
 }
 
 .blog-index__header {

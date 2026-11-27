@@ -1,30 +1,13 @@
 import type { ComponentProps } from 'react';
 import { isEqualPath, removeBase, usePageData } from 'rspress/runtime';
 import Theme, { Link } from 'rspress/theme';
+import { getBlogPosts, getPostDate, getPostTags, isBlogPost, type SitePage } from './blogPosts';
 import './blog.css';
 
-type Page = ReturnType<typeof usePageData>['siteData']['pages'][number];
-
-function isBlogPost({ routePath }: Pick<Page, 'routePath'>) {
-  return /^\/blog\/(?!index(?:\.html)?$).+/.test(removeBase(routePath));
-}
-
-function postDate({ frontmatter }: Page) {
-  return typeof frontmatter.date === 'string' ? frontmatter.date : undefined;
-}
-
-function blogPosts(pages: Page[]) {
-  return pages.filter(isBlogPost).sort((a, b) => (
-    (postDate(b) ?? '').localeCompare(postDate(a) ?? '') || a.routePath.localeCompare(b.routePath)
-  ));
-}
-
-function PostMeta({ post, showReadingTime = false }: { post: Page; showReadingTime?: boolean }) {
-  const date = postDate(post);
+function PostMeta({ post, showReadingTime = false }: { post: SitePage; showReadingTime?: boolean }) {
+  const date = getPostDate(post);
   const minutes = post.frontmatter.readingMinutes;
-  const tags = Array.isArray(post.frontmatter.tags)
-    ? post.frontmatter.tags.filter((tag): tag is string => typeof tag === 'string')
-    : [];
+  const tags = getPostTags(post);
 
   return (
     <div className="blog-post-meta">
@@ -35,7 +18,7 @@ function PostMeta({ post, showReadingTime = false }: { post: Page; showReadingTi
   );
 }
 
-function PostLink({ post, featured = false }: { post: Page; featured?: boolean }) {
+function PostLink({ post, featured = false }: { post: SitePage; featured?: boolean }) {
   return (
     <Link className={featured ? 'blog-post-link blog-post-link--featured' : 'blog-post-link'} href={removeBase(post.routePath)}>
       <div>
@@ -50,7 +33,7 @@ function PostLink({ post, featured = false }: { post: Page; featured?: boolean }
 
 export function BlogIndex() {
   const { siteData } = usePageData();
-  const posts = blogPosts(siteData.pages);
+  const posts = getBlogPosts(siteData.pages);
   const featured = posts.find((post) => post.frontmatter.featured === true) ?? posts[0];
   const remaining = posts.filter((post) => post !== featured);
 
@@ -95,7 +78,7 @@ function BlogHeading(props: ComponentProps<'h1'>) {
 
 const blogComponents = { h1: BlogHeading };
 
-function PostPagination({ posts, currentPath }: { posts: Page[]; currentPath: string }) {
+function PostPagination({ posts, currentPath }: { posts: SitePage[]; currentPath: string }) {
   const index = posts.findIndex((post) => isEqualPath(post.routePath, currentPath));
   if (index < 0) return null;
 
@@ -130,7 +113,7 @@ export function BlogLayout() {
       <Theme.Layout
         uiSwitch={{ showSidebar: false, showAside: true, showDocFooter: false }}
         beforeDocContent={<Link className="blog-article__back" href="/blog/">← 返回 Blog</Link>}
-        afterDocFooter={<PostPagination posts={blogPosts(siteData.pages)} currentPath={page.routePath} />}
+        afterDocFooter={<PostPagination posts={getBlogPosts(siteData.pages)} currentPath={page.routePath} />}
         components={blogComponents}
       />
       <a className="blog-article__to-top" href="#blog-article-top" aria-label="回到顶部">
